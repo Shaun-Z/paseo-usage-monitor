@@ -50,6 +50,32 @@ export interface CodexCreditsView {
   total: number | null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * When the seven-day window is spent Codex refuses the five-hour window too,
+ * but `/wham/usage` keeps reporting the session's own low percentage. Rewrite
+ * the session to 100% used so the card does not claim headroom that cannot be
+ * spent; the weekly reading is left exactly as the vendor sent it.
+ */
+export function blockSessionBehindExhaustedWeek(usage: unknown): unknown {
+  if (!isRecord(usage)) return usage;
+  const weekly = readNumberAtPath(usage, "rate_limit.secondary_window.used_percent");
+  if (weekly === null || weekly < 100) return usage;
+  const rateLimit = readAtPath(usage, "rate_limit");
+  const primary = readAtPath(usage, "rate_limit.primary_window");
+  if (!isRecord(rateLimit) || !isRecord(primary)) return usage;
+  return {
+    ...usage,
+    rate_limit: {
+      ...rateLimit,
+      primary_window: { ...primary, used_percent: 100 },
+    },
+  };
+}
+
 function monthlyUsageUrl(accountId: string): string {
   return `${CHATGPT_BACKEND}/accounts/${encodeURIComponent(accountId)}${MONTHLY_USAGE_PATH}`;
 }
@@ -134,7 +160,9 @@ export async function probeCodexUsage(adapters: CodexProbeAdapters): Promise<unk
     ...(accountId === null ? {} : { "ChatGPT-Account-Id": accountId }),
   };
   const usage = await adapters.fetchJson({ url: USAGE_URL, method: "GET", headers });
-  if (usage === null || typeof usage !== "object") return usage;
-  const view = await creditsView(usage, adapters, headers, accountId);
-  return view === null ? usage : { ...usage, codex_credits: view };
+  if (!isRecord(usage)) return usage;
+  const normalized = blockSessionBehindExhaustedWeek(usage);
+  if (!isRecord(normalized)) return normalized;
+  const view = await creditsView(normalized, adapters, headers, accountId);
+  return view === null ? normalized : { ...normalized, codex_credits: view };
 }

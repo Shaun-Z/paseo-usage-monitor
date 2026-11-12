@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { probeCodexUsage, type CodexProbeAdapters } from "./codex-probe.server";
+import {
+  blockSessionBehindExhaustedWeek,
+  probeCodexUsage,
+  type CodexProbeAdapters,
+} from "./codex-probe.server";
 import { UsageCredentialMissingError, UsageSourceError } from "./errors.server";
 import type { UsageHttpRequest } from "./source.server";
 
@@ -64,6 +68,43 @@ const MONTHLY = {
   },
   current_month_usage: 204.36297607421875,
 };
+
+describe("blockSessionBehindExhaustedWeek", () => {
+  test("marks the session unusable when the seven-day window is spent", () => {
+    const usage = {
+      rate_limit: {
+        allowed: false,
+        limit_reached: true,
+        primary_window: { used_percent: 0, reset_at: 1_800_000_000 },
+        secondary_window: { used_percent: 100, reset_at: 1_800_500_000 },
+      },
+    };
+
+    const normalized = blockSessionBehindExhaustedWeek(usage) as typeof usage;
+
+    expect(normalized.rate_limit.primary_window.used_percent).toBe(100);
+    expect(normalized.rate_limit.secondary_window.used_percent).toBe(100);
+    expect(normalized.rate_limit.allowed).toBe(false);
+    expect(normalized.rate_limit.primary_window.reset_at).toBe(1_800_000_000);
+  });
+
+  test("leaves a week with headroom alone", () => {
+    const usage = {
+      rate_limit: {
+        primary_window: { used_percent: 20 },
+        secondary_window: { used_percent: 99 },
+      },
+    };
+    expect(blockSessionBehindExhaustedWeek(usage)).toBe(usage);
+  });
+
+  test("leaves a document without both windows alone", () => {
+    expect(blockSessionBehindExhaustedWeek({})).toEqual({});
+    expect(
+      blockSessionBehindExhaustedWeek({ rate_limit: { secondary_window: { used_percent: 100 } } }),
+    ).toEqual({ rate_limit: { secondary_window: { used_percent: 100 } } });
+  });
+});
 
 describe("codex probe", () => {
   test("reads a prepaid balance without asking the cap route", async () => {

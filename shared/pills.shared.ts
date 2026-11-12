@@ -348,7 +348,25 @@ export function selectPillReading(
   // than whichever pool happens to be closest to empty.
   const fallback = scoped.length === 0 && fallbackModel !== null ? scopedFor(fallbackModel) : [];
   const chosen = scoped.length > 0 ? scoped : fallback.length > 0 ? fallback : pool;
-  return chosen.reduce(preferredReading);
+  const best = chosen.reduce(preferredReading);
+  const quotas = chosen.filter(
+    (reading): reading is UsageQuotaReading =>
+      reading.kind === "quota" && readingPercentUsed(reading) !== null,
+  );
+  // Every metered window spent: another 0% gauge says nothing a reader can act
+  // on. A provider that also publishes a balance — Codex's credits, prepaid
+  // overage — has the number that answers "what can I still spend".
+  const allQuotasExhausted =
+    quotas.length > 0 && quotas.every((reading) => (readingPercentUsed(reading) ?? 0) >= 100);
+  if (allQuotasExhausted) {
+    const balances = chosen.filter(
+      (reading) =>
+        reading.kind === "balance" &&
+        (reading.remaining !== null || reading.percentRemaining !== null),
+    );
+    if (balances.length > 0) return balances.reduce(preferredReading);
+  }
+  return best;
 }
 
 export interface PillMetrics {

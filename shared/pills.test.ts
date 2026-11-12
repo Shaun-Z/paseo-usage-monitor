@@ -624,6 +624,51 @@ describe("selectPillReading", () => {
     expect(selectPillReading([emptyUsd, fundedCny], null)).toBe(fundedCny);
   });
 
+  // A Codex week that is spent also blocks the five-hour session, so another
+  // 0% quota gauge is the wrong number; the credits balance is what is left.
+  test("switches to a balance when every metered window is spent", () => {
+    const session = quota({
+      id: "session",
+      window: { label: "Session", resetsAt: null, durationMs: FIVE_HOURS_MS },
+      percent: 100,
+    });
+    const weekly = quota({
+      id: "weekly",
+      window: { label: "Weekly", resetsAt: null, durationMs: SEVEN_DAYS_MS },
+      percent: 100,
+    });
+    const credits = balance({
+      id: "credits",
+      remaining: 7_795.6,
+      total: 8_000,
+      percentRemaining: 97.4,
+    });
+
+    expect(selectPillReading([session, weekly, credits], null)).toBe(credits);
+    expect(selectPillReading([session, weekly], null)).toBe(session);
+  });
+
+  test("keeps the quota while another window still has headroom", () => {
+    const session = quota({
+      id: "session",
+      window: { label: "Session", resetsAt: null, durationMs: FIVE_HOURS_MS },
+      percent: 100,
+    });
+    const weekly = quota({
+      id: "weekly",
+      window: { label: "Weekly", resetsAt: null, durationMs: SEVEN_DAYS_MS },
+      percent: 50,
+    });
+    const credits = balance({
+      id: "credits",
+      remaining: 7_795.6,
+      total: 8_000,
+      percentRemaining: 97.4,
+    });
+
+    expect(selectPillReading([session, weekly, credits], null)).toBe(session);
+  });
+
   test("a schedule-only provider has nothing a pill can draw", () => {
     expect(selectPillReading([rate()], null)).toBeNull();
     expect(selectPillReading([], null)).toBeNull();
