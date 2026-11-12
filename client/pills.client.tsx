@@ -103,6 +103,21 @@ interface MarkStyles {
   image: ImageStyle;
 }
 
+/**
+ * A balance is green while it can still be spent, amber as it runs low, red at
+ * nothing left. It is not a subscription window, so the quota thresholds would
+ * paint a healthy credit balance in the accent colour and tell a reader nothing.
+ */
+function pillTone(metrics: PillMetrics | null, theme: PluginTheme): string {
+  if (metrics?.readingKind === "balance") {
+    const remaining = metrics.percentUsed === null ? 100 : 100 - metrics.percentUsed;
+    if (remaining <= 10) return theme.colors.statusDanger;
+    if (remaining <= 30) return theme.colors.statusWarning;
+    return theme.colors.statusSuccess;
+  }
+  return usageTone(metrics?.percentUsed ?? 0, theme);
+}
+
 /** The provider mark at one of the pill's three sizes. */
 function createMarkStyles(size: number, plate: string, foreground: string): MarkStyles {
   const radius = Math.max(2, Math.round((size * MARK_RADIUS) / MARK_SLOT));
@@ -813,9 +828,7 @@ export function pillIconFor(
     // The tone carries the provider's own health, so a failed fetch reads as
     // danger whatever the last number said.
     const tone =
-      provider?.status === "error"
-        ? theme.colors.statusDanger
-        : usageTone(metrics?.percentUsed ?? 0, theme);
+      provider?.status === "error" ? theme.colors.statusDanger : pillTone(metrics, theme);
     const styles = useMemo(() => createPillStyles(theme, tone, size), [theme, tone, size]);
     const mark = {
       icon: provider?.icon ?? null,
@@ -898,9 +911,7 @@ export function pillContentFor(
         : selectPillReading(provider.readings, settings.reading, model, provider.fallbackModel);
     const metrics = reading === null || settings === null ? null : pillMetrics(reading, settings);
     const tone =
-      provider?.status === "error"
-        ? theme.colors.statusDanger
-        : usageTone(metrics?.percentUsed ?? 0, theme);
+      provider?.status === "error" ? theme.colors.statusDanger : pillTone(metrics, theme);
     // The card draws no mark, but it shares the stylesheet, and the rail slot
     // is what its mark sizes are stated at.
     const styles = useMemo(() => createPillStyles(theme, tone, MARK_SLOT), [theme, tone]);
@@ -945,16 +956,15 @@ export function composerPillLabel(
   if (settings.label === "reading" && metrics !== null) {
     parts.push(metrics.readingName);
   }
-  // A balance can stand in for a spent subscription window. Without a word
-  // beside the number it reads as another window, so name the credit itself
-  // even when the configured label is "none".
-  if (settings.label !== "reading" && metrics?.readingKind === "balance") {
-    parts.push(metrics.readingName);
-  }
   if (settings.readout === "percent" || settings.readout === "amount") {
     // A stale reading keeps its number: the last good one beats a dash, and
     // the card says why it did not move.
-    parts.push(metrics?.readout ?? EM_DASH);
+    const readout = metrics?.readout ?? EM_DASH;
+    // A balance can stand in for a spent subscription window. The currency
+    // sign is the mark that keeps the number from reading as another window;
+    // the card, not the host's text line, carries the colour.
+    const marker = metrics?.readingKind === "balance" && settings.label !== "reading" ? "¤" : "";
+    parts.push(`${marker}${readout}`);
   }
   const joined = parts.filter((part) => part !== "").join(" · ");
   return joined === "" ? provider.label : joined;

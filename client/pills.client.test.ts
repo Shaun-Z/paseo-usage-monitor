@@ -327,20 +327,18 @@ describe("composer pill text", () => {
     return mockSnapshot([{ label }])[0] as UsageProviderSnapshot;
   }
 
-  test("names a balance even when the configured label is none", () => {
+  test("marks a balance with the currency sign when the label is none", () => {
     const settings = settingsFor("none", "remaining");
     const metrics = pillMetrics(creditsReading(), settings);
 
-    expect(composerPillLabel(providerNamed("Codex"), settings, metrics)).toBe("Credits · 41%");
+    expect(composerPillLabel(providerNamed("Codex"), settings, metrics)).toBe("¤41%");
   });
 
-  test("keeps the provider label and adds the credit name", () => {
+  test("keeps the provider label beside the marked balance", () => {
     const settings = settingsFor("provider", "remaining");
     const metrics = pillMetrics(creditsReading(), settings);
 
-    expect(composerPillLabel(providerNamed("Codex"), settings, metrics)).toBe(
-      "Codex · Credits · 41%",
-    );
+    expect(composerPillLabel(providerNamed("Codex"), settings, metrics)).toBe("Codex · ¤41%");
   });
 
   test("does not name a quota, which is already the subscription figure", () => {
