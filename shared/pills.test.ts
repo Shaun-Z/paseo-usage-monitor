@@ -71,6 +71,21 @@ describe("pill selection rules", () => {
     expect(matchesPillSelection(matching, { provider: "omp", model: "other/gpt-6" })).toBe(false);
   });
 
+  // The reported defect: a Codex pill saved as "always" with its suggested
+  // rules showed Codex usage above a pi/deepseek chat, because the manual mode
+  // short-circuited the rules. Rules now decide whenever they are present.
+  test("rules saved beside always still keep a pill off another model's chat", () => {
+    const codex = pill({
+      visibility: "always",
+      matchRules: getDefaultPillMatchRules("codex"),
+    });
+    expect(matchesPillSelection(codex, { provider: "pi", model: "deepseek/deepseek-flash" })).toBe(
+      false,
+    );
+    expect(matchesPillSelection(codex, { provider: "pi", model: "openai/gpt-6" })).toBe(true);
+    expect(matchesPillSelection(codex, { provider: "codex", model: "gpt-6.1-sol" })).toBe(true);
+  });
+
   test("does not confuse a GPT model name with an OpenAI vendor", () => {
     const matching = pill({
       visibility: "matching",
@@ -284,11 +299,34 @@ describe("pill selection rules", () => {
     expect(getDefaultPillMatchRules("antigravity")).not.toEqual([]);
   });
 
-  test("manual always overrides rules while the master switch overrides both modes", () => {
+  test("antigravity suggests Paseo's own harnesses beside the vendor namespaces", () => {
+    expect(getDefaultPillMatchRules("antigravity")).toEqual([
+      { harness: "antigravity" },
+      { harness: "antigravity-cli" },
+      { harness: "omp", provider: "google-antigravity" },
+      { harness: "opencode", provider: "google-agy" },
+    ]);
+  });
+
+  test("always is the absence of rules, and the master switch overrides both modes", () => {
     const selection = { provider: "claude", model: null };
     expect(matchesPillSelection(pill({ visibility: "always", matchRules: [] }), selection)).toBe(
       true,
     );
+    // A config that saved both came from a build that kept the rules when the
+    // mode switched back; the rules are the constraint the user wrote.
+    expect(
+      matchesPillSelection(
+        pill({ visibility: "always", matchRules: [{ harness: "codex" }] }),
+        selection,
+      ),
+    ).toBe(false);
+    expect(
+      matchesPillSelection(
+        pill({ visibility: "always", matchRules: [{ harness: "claude" }] }),
+        selection,
+      ),
+    ).toBe(true);
     expect(
       matchesPillSelection(
         pill({
@@ -784,7 +822,11 @@ describe("usageWindowRows", () => {
   });
 
   test("inverts quota rows to left when configured for remaining", () => {
-    const [row] = usageWindowRows([quota({ id: "weekly", label: "Weekly", percent: 39 })], null, "remaining");
+    const [row] = usageWindowRows(
+      [quota({ id: "weekly", label: "Weekly", percent: 39 })],
+      null,
+      "remaining",
+    );
 
     expect(row).toMatchObject({
       name: "Weekly",

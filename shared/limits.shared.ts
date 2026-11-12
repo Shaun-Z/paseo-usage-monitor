@@ -381,7 +381,14 @@ export const UsagePillMatchRuleSchema = z
  */
 export const UsagePillDisplaySchema = z.object({
   enabled: z.boolean().default(false),
-  /** Existing enabled pills stay visible until matching is explicitly selected. */
+  /**
+   * `"always"` shows the pill on every composer and `"matching"` shows it only
+   * on agents a rule accepts. A non-empty `matchRules` array wins over this
+   * field either way: the rules are the constraint the user wrote, and the
+   * settings surface omits them from a config saved as "Always show" so a saved
+   * file never carries both meanings. The field stays for a config with no
+   * rules, which is how an existing enabled pill keeps showing after an upgrade.
+   */
   visibility: z.enum(["always", "matching"]).default("always"),
   /** Empty or absent rules match nothing. */
   matchRules: z.array(UsagePillMatchRuleSchema).optional(),

@@ -496,6 +496,17 @@ function pillMatchRuleDraft(rule: PillMatchRule = {}): PillMatchRuleDraft {
   };
 }
 
+/**
+ * A saved config can carry match rules and `visibility: "always"` at once: the
+ * rules used to survive a switch back to always, which left a pill that looked
+ * matched but rendered on every composer. The rules are the constraint the
+ * user wrote, so the editor opens on matching and a save normalises the pair.
+ */
+function pillVisibilityFor(pill: UsageDisplay["pill"]): "always" | "matching" {
+  if ((pill?.matchRules?.length ?? 0) > 0) return "matching";
+  return pill?.visibility ?? "always";
+}
+
 const CLOSED_EDITOR: EditorState = {
   mode: "idle",
   editingId: null,
@@ -641,7 +652,7 @@ function customEditorWithEntry(
     displayStyle: entry.display?.style ?? "bar",
     displayValue: entry.display?.value ?? "used",
     pillEnabled: entry.display?.pill?.enabled ?? false,
-    pillVisibility: entry.display?.pill?.visibility ?? "always",
+    pillVisibility: pillVisibilityFor(entry.display?.pill),
     pillMatchRules: entry.display?.pill?.matchRules?.map(pillMatchRuleDraft),
     pillOrder: entry.display?.pill?.order !== undefined ? String(entry.display.pill.order) : "",
     pillStyle: entry.display?.pill?.style ?? (entry.display?.style === "ring" ? "ring" : "bar"),
@@ -693,7 +704,7 @@ function presetEditor(
     displayStyle: entry?.display?.style ?? "bar",
     displayValue: entry?.display?.value ?? "used",
     pillEnabled: entry?.display?.pill?.enabled ?? false,
-    pillVisibility: entry?.display?.pill?.visibility ?? "always",
+    pillVisibility: pillVisibilityFor(entry?.display?.pill),
     pillMatchRules: entry?.display?.pill?.matchRules?.map(pillMatchRuleDraft),
     pillOrder: entry?.display?.pill?.order !== undefined ? String(entry.display.pill.order) : "",
     pillStyle: entry?.display?.pill?.style ?? (entry?.display?.style === "ring" ? "ring" : "bar"),
@@ -771,11 +782,16 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
   if (action.type === "display-value") return { ...state, displayValue: action.value };
   if (action.type === "pill-enabled") return { ...state, pillEnabled: action.value };
   if (action.type === "pill-visibility") {
+    // "Always show" keeps the drafts in memory so switching back restores them,
+    // but saving omits them: a config that says "always" and still carries
+    // rules would mean two things at once, and the rail treats the rules as the
+    // stronger statement.
     return {
       ...state,
       pillVisibility: action.value,
       pillMatchRules:
-        action.value === "matching" && state.pillMatchRules === undefined
+        action.value === "matching" &&
+        (state.pillMatchRules === undefined || state.pillMatchRules.length === 0)
           ? getDefaultPillMatchRules(state.presetId ?? state.id).map(pillMatchRuleDraft)
           : state.pillMatchRules,
     };
@@ -1070,11 +1086,14 @@ function buildProviderWrite(editor: EditorState): UsageProviderWrite {
   const pillValue = editor.pillValue !== editor.displayValue ? editor.pillValue : undefined;
   const pillLabel = editor.pillLabel !== "none" ? editor.pillLabel : undefined;
   const pillReadout = editor.pillReadout !== "percent" ? editor.pillReadout : undefined;
-  const pillMatchRules = editor.pillMatchRules?.map((rule) => ({
-    ...optionalValue("harness", rule.harness),
-    ...optionalValue("provider", rule.provider),
-    ...optionalValue("model", rule.model),
-  }));
+  const pillMatchRules =
+    editor.pillVisibility === "always"
+      ? undefined
+      : editor.pillMatchRules?.map((rule) => ({
+          ...optionalValue("harness", rule.harness),
+          ...optionalValue("provider", rule.provider),
+          ...optionalValue("model", rule.model),
+        }));
 
   const hasPillSettings =
     editor.pillEnabled ||
@@ -2241,7 +2260,7 @@ function ProviderEditor({
                   </Text>
                   <Text style={styles.muted}>
                     Rules read each agent's current harness and model. A model you pick in the
-                    composer moves the pills once it reaches the agent, on the next send.
+                    composer updates the agent, and the pills follow it.
                   </Text>
                   {(editor.pillMatchRules ?? []).map((rule, index) => (
                     <PillMatchRuleEditor

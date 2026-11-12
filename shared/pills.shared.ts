@@ -65,7 +65,10 @@ const SUGGESTED_MATCH_SPECS: Record<string, readonly string[]> = {
     "pi:github-copilot",
     "opencode:github-copilot",
   ],
-  antigravity: ["omp:google-antigravity", "opencode:google-agy"],
+  // Paseo's own Antigravity provider is the harness `antigravity`, and its CLI
+  // sibling reports `antigravity-cli`; both serve the same quota this preset
+  // reads, so matching has to name them as well as the vendor namespaces.
+  antigravity: ["antigravity", "antigravity-cli", "omp:google-antigravity", "opencode:google-agy"],
   cursor: ["cursor", "omp:cursor"],
   grok: ["omp:grok"],
   xai: ["omp:xai", "pi:xai", "opencode:xai"],
@@ -159,8 +162,15 @@ export function matchesPillSelection(
   if (!pill?.enabled) {
     return false;
   }
-  if (pill.visibility !== "matching") {
-    return true;
+  const rules = pill.matchRules ?? [];
+  // A rule is a constraint the user wrote, and it wins over the manual mode.
+  // "always" only means "no rules were configured": an older settings surface
+  // kept the rules when the mode was switched back, which left a config that
+  // looked matched but rendered the pill on every composer. Treating that pair
+  // as matching is what the rules say, and the surface now clears them when
+  // "Always show" is chosen so the two cannot disagree again.
+  if (rules.length === 0) {
+    return pill.visibility !== "matching";
   }
   const harness = selection.provider?.toLowerCase() ?? null;
   const qualifiedModel = selection.model?.toLowerCase() ?? null;
@@ -171,7 +181,7 @@ export function matchesPillSelection(
     qualifiedModel !== null && separator >= 0
       ? qualifiedModel.slice(separator + 1)
       : qualifiedModel;
-  return (pill.matchRules ?? []).some((rule) => {
+  return rules.some((rule) => {
     if (rule.harness === undefined && rule.provider === undefined && rule.model === undefined) {
       return false;
     }

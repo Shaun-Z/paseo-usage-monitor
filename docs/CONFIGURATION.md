@@ -105,17 +105,17 @@ An entry naming a preset that does not exist becomes an error row reading `Unkno
 
 A composer pill is a glance above the chat prompt: one gauge, one number, and one reading per opted-in provider. A provider stays off the rail until it opts in (`enabled: true`), so installing the plugin does not crowd every composer by default.
 
-| Field        | Type                                | Required | Default      | Notes                                                                                                                              |
-| ------------ | ----------------------------------- | -------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`    | boolean                             | no       | `false`      | Whether this provider appears on the composer rail.                                                                                |
-| `order`      | integer                             | no       | —            | Ascending position along the rail; pills without an order sort after ordered ones, by id.                                          |
-| `style`      | `"ring" \| "bar" \| "none"`         | no       | card `style` | Dial, left-to-right bar, or the mark alone (`none`). Inherits the card's own `display.style` (default `"bar"`).                    |
-| `value`      | `"used" \| "remaining"`             | no       | card `value` | Counts consumption (`used`) or headroom (`remaining`). Inherits the card's own `display.value` (default `"used"`).                 |
-| `reading`    | string                              | no       | automatic    | Mapping id to track. Omitted picks the shortest quota window (the session figure), falling back to a balance.                      |
-| `label`      | `"provider" \| "reading" \| "none"` | no       | `"none"`     | Leading part of the pill's text line: vendor name, reading label, or neither. Off by default.                                      |
-| `readout`    | `"percent" \| "amount" \| "none"`   | no       | `"percent"`  | Trailing part of the pill's text line: percentage, currency or unit amount, or neither.                                            |
-| `visibility` | `"always" \| "matching"`            | no       | `"always"`   | `"always"` shows the pill on every composer. `"matching"` shows it only on agents whose harness and model a rule accepts.          |
-| `matchRules` | array of match rules                | no       | —            | Checked only under `visibility: "matching"`. See [Matching the agent's harness and model](#matching-the-agents-harness-and-model). |
+| Field        | Type                                | Required | Default      | Notes                                                                                                                                                  |
+| ------------ | ----------------------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `enabled`    | boolean                             | no       | `false`      | Whether this provider appears on the composer rail.                                                                                                    |
+| `order`      | integer                             | no       | —            | Ascending position along the rail; pills without an order sort after ordered ones, by id.                                                              |
+| `style`      | `"ring" \| "bar" \| "none"`         | no       | card `style` | Dial, left-to-right bar, or the mark alone (`none`). Inherits the card's own `display.style` (default `"bar"`).                                        |
+| `value`      | `"used" \| "remaining"`             | no       | card `value` | Counts consumption (`used`) or headroom (`remaining`). Inherits the card's own `display.value` (default `"used"`).                                     |
+| `reading`    | string                              | no       | automatic    | Mapping id to track. Omitted picks the shortest quota window (the session figure), falling back to a balance.                                          |
+| `label`      | `"provider" \| "reading" \| "none"` | no       | `"none"`     | Leading part of the pill's text line: vendor name, reading label, or neither. Off by default.                                                          |
+| `readout`    | `"percent" \| "amount" \| "none"`   | no       | `"percent"`  | Trailing part of the pill's text line: percentage, currency or unit amount, or neither.                                                                |
+| `visibility` | `"always" \| "matching"`            | no       | `"always"`   | `"always"` shows the pill on every composer when no rules are configured. `"matching"` shows it only on agents whose harness and model a rule accepts. |
+| `matchRules` | array of match rules                | no       | —            | Applied whenever present, whatever `visibility` says. See [Matching the agent's harness and model](#matching-the-agents-harness-and-model).            |
 
 Two fields inherit from the card when omitted:
 
@@ -129,7 +129,7 @@ The host draws one icon slot and one line of text for each pill. The icon carrie
 
 ### Matching the agent's harness and model
 
-A pill under `visibility: "matching"` appears only on the composers whose agent a rule accepts, so a Claude pill sits above Claude Code chats and stays off the Codex ones. The plugin reads each agent's own harness and model — the open agents at startup, then the update stream — and registers or removes that agent's pill as those values change.
+A pill with `matchRules` appears only on the composers whose agent a rule accepts, so a Claude pill sits above Claude Code chats and stays off the Codex ones. The rules apply even when `visibility` is `"always"`: a saved config that carries both came from a build that kept the rules when the mode was switched back, and the rules are the constraint the user actually wrote. The settings surface now omits the rules from a config saved as **Always show**, so a file it writes cannot carry both meanings. The plugin reads each agent's own harness and model — the open agents at startup, then the update stream — and registers or removes that agent's pill as those values change.
 
 | Field      | Type   | Required | Notes                                                                                             |
 | ---------- | ------ | -------- | ------------------------------------------------------------------------------------------------- |
@@ -158,7 +158,7 @@ Those namespaces do not agree with each other, which is the reason the suggestio
 
 Two traps the table avoids. A model id is not an account: `deepseek-v4-flash` is sold by OpenCode Zen, OpenCode Go and DeepSeek itself, so suggestions match the vendor segment and never the model name. And a vendor id is not a plan: `moonshot` bills an API key while `kimi` meters a Kimi Code subscription, so they are separate presets with separate rules.
 
-What matching follows is the agent's **current** harness and model, which is what the host reports to plugins. Picking a different model in the composer moves the pills once that choice reaches the agent — the daemon applies it on the next send — not while the picker is still open. The rail itself belongs to an existing agent, so a brand-new chat shows no pills until its agent exists.
+What matching follows is the agent's **current** harness and model, which is what the host reports to plugins. Picking a different model in the composer updates that model on the agent, and the rail follows it on the update stream. The rail itself belongs to an existing agent, so a brand-new chat shows no pills until its agent exists.
 
 Editing rules from the settings surface takes effect on the rail's next read of the config, within a minute. Saving from the surface is immediate for the dashboard cards; the rail is a separate poller.
 
