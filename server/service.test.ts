@@ -192,6 +192,41 @@ const WINDOW_READINGS = [
 const HTTP_SOURCE = { kind: "http", url: "https://example.test/usage" };
 
 describe("usage service", () => {
+  test("projects the model a provider names as its fallback", async () => {
+    const source = createFakeSource({
+      http: async () => ({ latestModel: "Claude Opus 5.5 (Medium)", used: 3 }),
+    });
+    const service = createService({
+      source,
+      overrides: {
+        demo: {
+          label: "Demo",
+          source: HTTP_SOURCE,
+          fallbackModelPath: "latestModel",
+          readings: COUNTER_READINGS,
+        },
+      },
+    });
+
+    const snapshot = await service.read({ refresh: false });
+
+    expect(providerNamed(snapshot.providers, "demo").fallbackModel).toBe(
+      "Claude Opus 5.5 (Medium)",
+    );
+  });
+
+  test("leaves the fallback model null when the provider declares no path", async () => {
+    const source = createFakeSource({ http: async () => ({ used: 3 }) });
+    const service = createService({
+      source,
+      overrides: { demo: { label: "Demo", source: HTTP_SOURCE, readings: COUNTER_READINGS } },
+    });
+
+    const snapshot = await service.read({ refresh: false });
+
+    expect(providerNamed(snapshot.providers, "demo").fallbackModel).toBeNull();
+  });
+
   test("projects a quota reading with a window and derives the consumed percentage", async () => {
     const source = createFakeSource({
       http: async () => ({ google: { used: 250, limit: 1000, resets: "2026-03-01T17:00:00Z" } }),
@@ -234,6 +269,7 @@ describe("usage service", () => {
           label: "Antigravity",
           description: null,
           unverified: false,
+          fallbackModel: null,
           live: false,
           status: "ok",
           error: null,
@@ -505,6 +541,7 @@ describe("usage service", () => {
         label: "mystery",
         description: null,
         unverified: false,
+        fallbackModel: null,
         live: false,
         status: "error",
         readings: [],

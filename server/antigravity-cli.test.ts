@@ -147,6 +147,22 @@ describe("agy /usage", () => {
     expect(deps.probeKeyring).not.toHaveBeenCalled();
   });
 
+  test("carries the model the CLI last selected, with either source", async () => {
+    const cli = adapters();
+    cli.readLatestModel = () => "Claude Opus 5.5 (Medium)";
+    await expect(probeAntigravityQuota(cli)).resolves.toMatchObject({
+      source: "agy /usage",
+      latestModel: "Claude Opus 5.5 (Medium)",
+    });
+
+    const fallback = adapters("{}");
+    fallback.readLatestModel = () => "Gemini 3.8 Flash (High)";
+    await expect(probeAntigravityQuota(fallback)).resolves.toMatchObject({
+      source: "legacy",
+      latestModel: "Gemini 3.8 Flash (High)",
+    });
+  });
+
   test.each([
     "private raw output",
     "{}",

@@ -77,6 +77,12 @@ export interface AntigravityQuota {
   source: string;
   fetchedAt: string;
   /**
+   * The model the `agy` CLI last selected, from its own settings file. A
+   * session on another harness has no Antigravity model to match, and this is
+   * the closest thing the vendor gives to "the model I was just using".
+   */
+  latestModel: string | null;
+  /**
    * The plan this login is on, as Google reports it. It belongs on the card
    * because it decides whether a bucket can move at all: only a paid plan
    * refreshes the five-hour window, so a free-tier login reads 0% there
@@ -1230,6 +1236,14 @@ export function windowLabelOf(window: unknown): string | null {
   return null;
 }
 
+/** Card and rail names, short enough for a row beside a percentage. */
+const GROUP_LABELS: Record<string, string> = { "Claude and GPT models": "Claude/GPT" };
+
+function shortGroupLabel(name: string | null): string | null {
+  if (name === null) return null;
+  return GROUP_LABELS[name] ?? name;
+}
+
 /**
  * The separate paid pools — Gemini 4 Argon is the live one — carry no model
  * list in their description, only a heading that is the model's own name. A
@@ -1268,8 +1282,11 @@ export function mapQuotaSummary(
   for (const rawGroup of groups) {
     const group = asRecord(rawGroup);
     if (group === null) continue;
-    const groupName = typeof group.displayName === "string" ? group.displayName : null;
-    const models = parseGroupModels(group.description) ?? groupNameModels(groupName);
+    const rawGroupName = typeof group.displayName === "string" ? group.displayName : null;
+    const groupName = shortGroupLabel(rawGroupName);
+    // Decide whether the heading names one model before shortening it: the
+    // vendor's generic "Claude and GPT models" must stay a shared pool.
+    const models = parseGroupModels(group.description) ?? groupNameModels(rawGroupName);
     const buckets = Array.isArray(group.buckets) ? group.buckets : [];
     for (const rawBucket of buckets) {
       const bucket = asRecord(rawBucket);
@@ -1329,7 +1346,7 @@ export function mapQuotaSummary(
       const found = byId.get(id);
       const remaining = found === undefined ? null : found.bucket.remainingFraction;
       const resetTime = found === undefined ? null : found.bucket.resetTime;
-      const groupName = found?.group ?? group;
+      const groupName = shortGroupLabel(found?.group ?? group);
       const bucket: AntigravityQuotaBucket = {
         id,
         label,
@@ -1350,7 +1367,7 @@ export function mapQuotaSummary(
     },
   );
 
-  return { source, fetchedAt, tier, buckets };
+  return { source, fetchedAt, tier, latestModel: null, buckets };
 }
 
 async function fetchQuotaSummary(
@@ -1532,6 +1549,8 @@ export interface AntigravityQuotaAdapters {
   runCli(signal: AbortSignal): Promise<string>;
   probeKeyring(): Promise<AntigravityQuota>;
   now(): Date;
+  /** The model the CLI last selected; absent on a caller that has no such file. */
+  readLatestModel?(): string | null;
 }
 
 async function runAgyUsage(signal: AbortSignal): Promise<string> {
@@ -1557,11 +1576,25 @@ async function runAgyUsage(signal: AbortSignal): Promise<string> {
   }
 }
 
+/** The CLI's own settings file is where it records the model it last used. */
+function readLatestModel(): string | null {
+  const path = join(homedir(), ".gemini", "antigravity-cli", "settings.json");
+  try {
+    const document: unknown = JSON.parse(readFileSync(path, "utf8"));
+    if (typeof document !== "object" || document === null) return null;
+    const model = (document as Record<string, unknown>).model;
+    return typeof model === "string" && model.trim() !== "" ? model.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function createNodeAntigravityQuotaAdapters(): AntigravityQuotaAdapters {
   return {
     runCli: runAgyUsage,
     probeKeyring: probeKeyringQuota,
     now: () => new Date(),
+    readLatestModel,
   };
 }
 
@@ -1569,23 +1602,25 @@ export function createNodeAntigravityQuotaAdapters(): AntigravityQuotaAdapters {
 export async function probeAntigravityQuota(
   adapters: AntigravityQuotaAdapters = createNodeAntigravityQuotaAdapters(),
 ): Promise<AntigravityQuota> {
-  let cliFailure: string;
+  const latestModel = adapters.readLatestModel?.() ?? null;
   try {
     // Also bound injected runners so a stalled CLI always reaches the fallback.
-    return await runPhase(
+    const quota = await runPhase(
       startDeadline(PROBE_BUDGET_MS),
       "reading agy /usage",
       PROBE_BUDGET_MS,
       async (signal) => parseAgyUsage(await adapters.runCli(signal), adapters.now().toISOString()),
     );
+    return { ...quota, latestModel };
   } catch (error) {
-    cliFailure = error instanceof AntigravityProbeError ? error.message : "agy /usage failed";
-  }
-  try {
-    return await adapters.probeKeyring();
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : "keyring probe failed";
-    throw new AntigravityProbeError(`${cliFailure}; keyring fallback: ${reason}`);
+    const cliFailure = error instanceof AntigravityProbeError ? error.message : "agy /usage failed";
+    try {
+      return { ...(await adapters.probeKeyring()), latestModel };
+    } catch (fallbackError) {
+      const reason =
+        fallbackError instanceof Error ? fallbackError.message : "keyring probe failed";
+      throw new AntigravityProbeError(`${cliFailure}; keyring fallback: ${reason}`);
+    }
   }
 }
 

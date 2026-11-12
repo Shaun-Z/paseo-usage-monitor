@@ -808,7 +808,7 @@ export function pillIconFor(
     const reading =
       provider === null || settings === null
         ? null
-        : selectPillReading(provider.readings, settings.reading, model);
+        : selectPillReading(provider.readings, settings.reading, model, provider.fallbackModel);
     const metrics = reading === null || settings === null ? null : pillMetrics(reading, settings);
     // The tone carries the provider's own health, so a failed fetch reads as
     // danger whatever the last number said.
@@ -895,7 +895,7 @@ export function pillContentFor(
     const reading =
       provider === null || settings === null
         ? null
-        : selectPillReading(provider.readings, settings.reading, model);
+        : selectPillReading(provider.readings, settings.reading, model, provider.fallbackModel);
     const metrics = reading === null || settings === null ? null : pillMetrics(reading, settings);
     const tone =
       provider?.status === "error"
@@ -963,7 +963,12 @@ function entryLabel(
   if (provider === null) {
     return entry.providerLabel;
   }
-  const reading = selectPillReading(provider.readings, entry.settings.reading, model);
+  const reading = selectPillReading(
+    provider.readings,
+    entry.settings.reading,
+    model,
+    provider.fallbackModel,
+  );
   const metrics = reading === null ? null : pillMetrics(reading, entry.settings);
   return composerPillLabel(provider, entry.settings, metrics);
 }

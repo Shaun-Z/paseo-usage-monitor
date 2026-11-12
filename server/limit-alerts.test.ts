@@ -110,6 +110,7 @@ function snapshotWithReset(providerId: string, resetsAt: string): UsageSnapshot 
         label: providerId,
         description: null,
         unverified: false,
+        fallbackModel: null,
         live: false,
         status: "ok",
         readings: [

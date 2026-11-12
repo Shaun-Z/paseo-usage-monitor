@@ -150,14 +150,14 @@ If a vendor ships an endpoint, none of this needs a code change — write a prov
 
 This one works. Live output on this machine:
 
-| Bucket          | Window  | Group                 | Used   | Resets               |
-| --------------- | ------- | --------------------- | ------ | -------------------- |
-| `gemini-5h`     | Session | Gemini Models         | 9.23%  | 2026-08-28T22:11:13Z |
-| `gemini-weekly` | Weekly  | Gemini Models         | 25.06% | 2026-09-01T20:00:00Z |
-| `3p-5h`         | Session | Claude and GPT models | 0%     | —                    |
-| `3p-weekly`     | Weekly  | Claude and GPT models | 0%     | —                    |
+| Bucket          | Window  | Group         | Used   | Resets               |
+| --------------- | ------- | ------------- | ------ | -------------------- |
+| `gemini-5h`     | Session | Gemini Models | 9.23%  | 2026-08-28T22:11:13Z |
+| `gemini-weekly` | Weekly  | Gemini Models | 25.06% | 2026-09-01T20:00:00Z |
+| `3p-5h`         | Session | Claude/GPT    | 0%     | —                    |
+| `3p-weekly`     | Weekly  | Claude/GPT    | 0%     | —                    |
 
-Two shared pools, each with a rolling 5-hour and a weekly window. That is exactly the model-family-plus-two-windows shape the `group` field and the `each` projection were designed for. The four original buckets retain their slots, with null readings when omitted. Additional buckets, including Gemini 4 Argon and future pools, are appended automatically using their vendor IDs and display names. Each pool also carries the models the vendor says it serves — the group description names them, and a separate pool such as Gemini 4 Argon names its model in its heading — so the composer pill tracks the pool for the model the agent selected instead of whichever pool happens to be closest to running out. Each bucket states its own window, so rows are named for the pool they belong to and read **Session** or **Weekly** rather than a generic **Window**: `Gemini Models · Session`, `Claude and GPT models · Weekly`, `Gemini 4 Argon · Weekly`.
+Two shared pools, each with a rolling 5-hour and a weekly window. That is exactly the model-family-plus-two-windows shape the `group` field and the `each` projection were designed for. The four original buckets retain their slots, with null readings when omitted. Additional buckets, including Gemini 4 Argon and future pools, are appended automatically using their vendor IDs and display names. Each pool also carries the models the vendor says it serves — the group description names them, and a separate pool such as Gemini 4 Argon names its model in its heading — so the composer pill tracks the pool for the model the agent selected instead of whichever pool happens to be closest to running out. Each bucket states its own window, so rows are named for the pool they belong to and read **Session** or **Weekly** rather than a generic **Window**: `Gemini Models · Session`, `Claude/GPT · Weekly`, `Gemini 4 Argon · Weekly`. The vendor's longer `Claude and GPT models` heading is shortened to `Claude/GPT` for the row. When the agent's model is not an Antigravity model — or none is selected yet — the rail uses the model the `agy` CLI last selected, read from `~/.gemini/antigravity-cli/settings.json`, so it shows that model's session rather than whichever pool is closest to empty.
 
 ### The quota bars are one ledger, not all of your usage
 

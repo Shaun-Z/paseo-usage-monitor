@@ -472,6 +472,13 @@ export const UsageProviderSchema = z.object({
   credentials: UsageCredentialsSchema.default({}),
   /** Omit when every reading is schedule-driven and needs no request. */
   source: UsageSourceSchema.optional(),
+  /**
+   * JSON path into the provider's own document naming the model to scope the
+   * composer rail to when the agent's current model matches no reading's
+   * `models`. Antigravity records the model its CLI last selected; a session on
+   * another harness uses that pool instead of whichever is closest to empty.
+   */
+  fallbackModelPath: z.string().min(1).optional(),
   readings: z.array(UsageReadingMappingSchema).min(1),
   /**
    * Ceilings for readings whose vendor publishes none, keyed by the reading
@@ -495,6 +502,7 @@ export const UsageProviderOverrideSchema = z.object({
   refreshIntervalMs: z.number().int().min(30_000).max(86_400_000).optional(),
   credentials: UsageCredentialsSchema.optional(),
   source: UsageSourceSchema.optional(),
+  fallbackModelPath: z.string().min(1).optional(),
   readings: z.array(UsageReadingMappingSchema).min(1).optional(),
   limits: z.record(z.string(), z.number().positive()).optional(),
   display: UsageDisplaySchema.optional(),
@@ -594,6 +602,11 @@ export const UsageProviderSnapshotSchema = z.object({
   label: z.string(),
   description: z.string().nullable(),
   unverified: z.boolean(),
+  /**
+   * The model this provider falls back to when the agent's model matches none
+   * of its readings. Null when the provider declares no such document path.
+   */
+  fallbackModel: z.string().nullable(),
   /**
    * True when the readings come from a local file the daemon watches, so the
    * writer's next change lands without waiting out the refresh interval. The

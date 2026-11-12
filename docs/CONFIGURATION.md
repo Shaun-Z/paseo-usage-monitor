@@ -55,6 +55,7 @@ Malformed JSON, or JSON that fails the schema, makes the plugin throw a `UsageCo
 | `refreshIntervalMs` | integer, 30000 – 86400000   | no                        | `300000` | Cache TTL for this provider.                                                                                 |
 | `credentials`       | credential map              | no                        | `{}`     | See [Credentials](CREDENTIALS.md#credentials).                                                               |
 | `source`            | source object               | no                        | —        | Omit only when every reading is schedule-driven and needs no request.                                        |
+| `fallbackModelPath` | JSON path                   | no                        | —        | Names the model the composer rail falls back to when the agent's model matches no reading's `models`.        |
 | `readings`          | array of readings, min 1    | required without `preset` | —        | See [Readings](#readings).                                                                                   |
 | `limits`            | map of reading id to number | no                        | `{}`     | Ceilings for readings whose vendor publishes none, so a bare count becomes a bar. See [Ceilings](#ceilings). |
 | `display`           | display object              | no                        | `{}`     | Card layout and composer rail pill settings. See [Display and composer pills](#display-and-composer-pills).  |

@@ -250,6 +250,7 @@ function baseSnapshot(id: string, provider: UsageProvider): UsageProviderSnapsho
     label: provider.label,
     description: provider.description ?? null,
     unverified: provider.unverified,
+    fallbackModel: null,
     live: provider.source?.kind === "file",
     ...(provider.supportsBankedReset ? { supportsBankedReset: true } : {}),
     status: "ok",
@@ -440,8 +441,13 @@ export function createUsageService(input: UsageServiceInput): UsageService {
     const resolver = createCredentialResolver(provider.credentials, adapters.credentials);
     try {
       const document = await readDocument(id, provider, resolver);
+      const fallbackModel =
+        provider.fallbackModelPath === undefined
+          ? null
+          : readStringAtPath(document, provider.fallbackModelPath);
       const snapshot = {
         ...baseSnapshot(id, provider),
+        fallbackModel: fallbackModel === "" ? null : fallbackModel,
         readings: projectReadings({ readings: provider.readings, document, now: timestamp }),
         fetchedAt: timestamp.toISOString(),
       };
@@ -535,6 +541,7 @@ export function createUsageService(input: UsageServiceInput): UsageService {
         label: entry.id,
         description: null,
         unverified: false,
+        fallbackModel: null,
         live: false,
         status: "error",
         readings: [],

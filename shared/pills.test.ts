@@ -442,6 +442,7 @@ function snapshot(overrides: Partial<UsageProviderSnapshot> = {}): UsageProvider
     label: "Claude",
     description: null,
     unverified: false,
+    fallbackModel: null,
     live: false,
     status: "ok",
     readings: [quota()],
@@ -689,6 +690,40 @@ describe("selectPillReading", () => {
     });
 
     expect(selectPillReading([flash, argon], null, "gemini-5-ultra")).toBe(flash);
+  });
+
+  test("a session on another harness falls back to the latest model's pool", () => {
+    const gemini = quota({
+      id: "gemini-5h",
+      window: { label: "Session", resetsAt: null, durationMs: FIVE_HOURS_MS },
+      percent: 2,
+      models: ["Gemini Flash", "Gemini Pro"],
+    });
+    const claude = quota({
+      id: "3p-5h",
+      window: { label: "Session", resetsAt: null, durationMs: FIVE_HOURS_MS },
+      percent: 100,
+      models: ["Claude Opus", "Claude Sonnet", "GPT-OSS"],
+    });
+    const argon = quota({
+      id: "argon-weekly",
+      window: { label: "Weekly", resetsAt: null, durationMs: SEVEN_DAYS_MS },
+      percent: 99.6,
+      models: ["Gemini 4 Argon"],
+    });
+    const readings = [gemini, claude, argon];
+
+    // A deepseek session matches no pool; the CLI's last model picks the pool.
+    expect(selectPillReading(readings, null, "deepseek-flash", "Claude Opus 5.5 (Medium)")).toBe(
+      claude,
+    );
+    // No model selected yet: the same fallback applies.
+    expect(selectPillReading(readings, null, null, "Gemini 3.8 Flash (High)")).toBe(gemini);
+    // A matching model still wins over the fallback.
+    expect(selectPillReading(readings, null, "gemini-3.8-flash", "Claude Opus 5.5")).toBe(gemini);
+    // A fallback that names no pool either keeps the unscoped rule, which
+    // picks the shortest window rather than the Argon weekly one.
+    expect(selectPillReading(readings, null, "deepseek-flash", "muse-1")).toBe(claude);
   });
 
   test("a pinned reading stays pinned whatever model is selected", () => {

@@ -326,6 +326,7 @@ export function selectPillReading(
   readings: readonly UsageReading[],
   preferredId: string | null,
   model: string | null = null,
+  fallbackModel: string | null = null,
 ): UsagePillReading | null {
   const candidates = readings.filter(isPillReading);
   if (candidates.length === 0) {
@@ -339,8 +340,15 @@ export function selectPillReading(
   }
   const measured = candidates.filter((reading) => readingPercentUsed(reading) !== null);
   const pool = measured.length > 0 ? measured : candidates;
-  const scoped = model === null ? [] : pool.filter((reading) => readingServesModel(reading, model));
-  return (scoped.length > 0 ? scoped : pool).reduce(preferredReading);
+  const scopedFor = (candidateModel: string) =>
+    pool.filter((reading) => readingServesModel(reading, candidateModel));
+  const scoped = model === null ? [] : scopedFor(model);
+  // A session on another harness has no Antigravity model to match. The vendor
+  // keeps the last model its CLI selected, so use that pool's session rather
+  // than whichever pool happens to be closest to empty.
+  const fallback = scoped.length === 0 && fallbackModel !== null ? scopedFor(fallbackModel) : [];
+  const chosen = scoped.length > 0 ? scoped : fallback.length > 0 ? fallback : pool;
+  return chosen.reduce(preferredReading);
 }
 
 export interface PillMetrics {

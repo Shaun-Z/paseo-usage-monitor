@@ -26,6 +26,7 @@ function provider(supportsBankedReset: boolean, remaining: number): UsageProvide
     label: "Codex",
     description: null,
     unverified: false,
+    fallbackModel: null,
     live: false,
     supportsBankedReset,
     status: "ok",

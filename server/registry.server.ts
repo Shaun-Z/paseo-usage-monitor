@@ -121,6 +121,9 @@ function applyOverride(preset: UsageProvider, override: UsageProviderOverride): 
       ? {}
       : { refreshIntervalMs: override.refreshIntervalMs }),
     ...(override.source === undefined ? {} : { source: override.source }),
+    ...(override.fallbackModelPath === undefined
+      ? {}
+      : { fallbackModelPath: override.fallbackModelPath }),
     ...(override.readings === undefined
       ? {}
       : { readings: hydratePresetReadings(preset.readings, override.readings) }),

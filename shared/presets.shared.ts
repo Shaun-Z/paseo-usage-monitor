@@ -1705,6 +1705,10 @@ const PRESET_DEFINITIONS: Record<string, UsageProvider> = {
       "Unverified: Google publishes no Antigravity quota API, so the percentages come from agy /usage with a stored-credential/internal-endpoint fallback, and may break without notice. That route answers for the consumer plan only, so the rows under it count what each Antigravity client on this machine actually spent, from its own logs.",
     unverified: true,
     source: { kind: "probe", probe: "antigravity" },
+    // The CLI records the model it last used. A composer that has not selected
+    // an Antigravity model (or is on another harness) tracks that model's pool
+    // instead of whichever pool is closest to empty.
+    fallbackModelPath: "latestModel",
     readings: [
       /**
        * Local accounting first, because it is what answers "how much have I

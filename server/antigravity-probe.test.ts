@@ -498,6 +498,7 @@ describe("mapQuotaSummary", () => {
       source: SOURCE,
       fetchedAt: FETCHED_AT,
       tier: null,
+      latestModel: null,
       buckets: [
         {
           id: "gemini-5h",
@@ -522,7 +523,7 @@ describe("mapQuotaSummary", () => {
         {
           id: "3p-5h",
           label: "Session",
-          group: "Claude and GPT models",
+          group: "Claude/GPT",
           usedPercent: 0,
           resetsAt: "2026-08-28T22:51:48Z",
           durationMs: 18_000_000,
@@ -532,7 +533,7 @@ describe("mapQuotaSummary", () => {
         {
           id: "3p-weekly",
           label: "Weekly",
-          group: "Claude and GPT models",
+          group: "Claude/GPT",
           usedPercent: 0,
           resetsAt: "2026-09-04T17:51:48Z",
           durationMs: 604_800_000,
@@ -552,8 +553,8 @@ describe("mapQuotaSummary", () => {
     expect(mapped.buckets.map((bucket) => bucket.group)).toEqual([
       "Gemini Models · Free tier",
       "Gemini Models · Free tier",
-      "Claude and GPT models · Free tier",
-      "Claude and GPT models · Free tier",
+      "Claude/GPT · Free tier",
+      "Claude/GPT · Free tier",
     ]);
   });
 
@@ -583,7 +584,7 @@ describe("mapQuotaSummary", () => {
     expect(mapQuotaSummary(noGroupName, SOURCE, FETCHED_AT).buckets[2]).toEqual({
       id: "3p-5h",
       label: "Session",
-      group: "Claude and GPT models",
+      group: "Claude/GPT",
       usedPercent: 50,
       resetsAt: null,
       durationMs: 18_000_000,
