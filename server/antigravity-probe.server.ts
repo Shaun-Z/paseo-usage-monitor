@@ -53,6 +53,8 @@ import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 import { promisify, stripVTControlCharacters } from "node:util";
 
+import { readLatestAntigravityModel } from "./antigravity-clients.server";
+
 const execFileAsync = promisify(execFile);
 
 export interface AntigravityQuotaBucket {
@@ -1576,8 +1578,8 @@ async function runAgyUsage(signal: AbortSignal): Promise<string> {
   }
 }
 
-/** The CLI's own settings file is where it records the model it last used. */
-function readLatestModel(): string | null {
+/** The model picker's value, which can lag the model that actually ran. */
+function readSettingsModel(): string | null {
   const path = join(homedir(), ".gemini", "antigravity-cli", "settings.json");
   try {
     const document: unknown = JSON.parse(readFileSync(path, "utf8"));
@@ -1587,6 +1589,15 @@ function readLatestModel(): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The newest generation the CLI recorded is the model it actually ran, while
+ * the settings file only records the picker. Prefer the former and keep the
+ * latter for a machine whose conversation stores are unreadable.
+ */
+function readLatestModel(): string | null {
+  return readLatestAntigravityModel() ?? readSettingsModel();
 }
 
 export function createNodeAntigravityQuotaAdapters(): AntigravityQuotaAdapters {
