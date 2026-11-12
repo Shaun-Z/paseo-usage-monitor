@@ -28,6 +28,8 @@ interface ReadingIdentity {
   id: string;
   label: string;
   group: string | null;
+  /** Vendor model names sharing this bucket, or null for a shared pool. */
+  models: string[] | null;
 }
 
 /**
@@ -53,6 +55,21 @@ function readNonEmptyString(document: unknown, path: string | undefined): string
   if (value === null) return null;
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
+}
+
+/**
+ * A bucket can name the models it serves as a list of strings. Anything else at
+ * the path is absent: a vendor that changes the shape must not turn a model
+ * name into a number or an object.
+ */
+function readStringList(document: unknown, path: string | undefined): string[] | null {
+  if (!path) return null;
+  const value = readAtPath(document, path);
+  if (!Array.isArray(value)) return null;
+  const names = value
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter((entry) => entry !== "");
+  return names.length === 0 ? null : names;
 }
 
 function readAmount(document: unknown, path: string | undefined): number | null {
@@ -155,6 +172,7 @@ function projectQuota(
     limit: amounts.limit,
     remaining: amounts.remaining,
     percent: resolveQuotaPercent(mapping, document, amounts),
+    ...(identity.models === null ? {} : { models: identity.models }),
   };
 }
 
@@ -421,6 +439,7 @@ function claimEachIdentity(
     label:
       labelValue === null ? `${mapping.label} ${index + 1}` : `${mapping.label} · ${labelValue}`,
     group: readNonEmptyString(element, each.groupPath) ?? mapping.group ?? null,
+    models: readStringList(element, each.modelsPath),
   };
 }
 
@@ -463,7 +482,12 @@ interface BucketInstance {
 function bucketInstances(mapping: BucketMapping, document: unknown): BucketInstance[] {
   const { each } = mapping;
   if (!each) {
-    const identity = { id: mapping.id, label: mapping.label, group: mapping.group ?? null };
+    const identity = {
+      id: mapping.id,
+      label: mapping.label,
+      group: mapping.group ?? null,
+      models: null,
+    };
     return [{ document, identity }];
   }
   const value = readAtPath(document, each.path);
@@ -492,6 +516,7 @@ function bucketInstances(mapping: BucketMapping, document: unknown): BucketInsta
           id: mapping.id,
           label: mapping.label,
           group: readNonEmptyString(element, each.groupPath) ?? mapping.group ?? null,
+          models: readStringList(element, each.modelsPath),
         },
       },
     ];

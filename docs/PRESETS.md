@@ -157,7 +157,7 @@ This one works. Live output on this machine:
 | `3p-5h`         | Session | Claude and GPT models | 0%     | —                    |
 | `3p-weekly`     | Weekly  | Claude and GPT models | 0%     | —                    |
 
-Two shared pools, each with a rolling 5-hour and a weekly window. That is exactly the model-family-plus-two-windows shape the `group` field and the `each` projection were designed for. The four original buckets retain their slots, with null readings when omitted. Additional buckets, including Gemini 4 Argon and future pools, are appended automatically using their vendor IDs and display names.
+Two shared pools, each with a rolling 5-hour and a weekly window. That is exactly the model-family-plus-two-windows shape the `group` field and the `each` projection were designed for. The four original buckets retain their slots, with null readings when omitted. Additional buckets, including Gemini 4 Argon and future pools, are appended automatically using their vendor IDs and display names. Each pool also carries the models the vendor says it serves — the group description names them, and a separate pool such as Gemini 4 Argon names its model in its heading — so the composer pill tracks the pool for the model the agent selected instead of whichever pool happens to be closest to running out.
 
 ### The quota bars are one ledger, not all of your usage
 

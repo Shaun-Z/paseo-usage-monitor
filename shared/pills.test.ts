@@ -627,6 +627,96 @@ describe("selectPillReading", () => {
     expect(selectPillReading([rate()], null)).toBeNull();
     expect(selectPillReading([], null)).toBeNull();
   });
+
+  // The reported defect: Antigravity meters Gemini, Claude/GPT and Gemini 4
+  // Argon separately, and Argon at 99% hijacked the rail for a Gemini Flash
+  // agent because it was the pool closest to running out.
+  test("the agent's model scopes the pool the rail tracks", () => {
+    const argon = quota({
+      id: "bucket-gemini-argon-wtu-weekly",
+      label: "Plan pool · Gemini 4 Argon Weekly Limit",
+      group: "Gemini 4 Argon",
+      window: { label: "Window", resetsAt: null, durationMs: SEVEN_DAYS_MS },
+      percent: 99.6,
+      models: ["Gemini 4 Argon"],
+    });
+    const flashSession = quota({
+      id: "bucket-gemini-5h",
+      label: "Plan pool · Session",
+      group: "Gemini Models",
+      window: { label: "Window", resetsAt: null, durationMs: FIVE_HOURS_MS },
+      percent: 0,
+      models: ["Gemini Flash", "Gemini Pro"],
+    });
+    const flashWeekly = quota({
+      id: "bucket-gemini-weekly",
+      label: "Plan pool · Weekly",
+      group: "Gemini Models",
+      window: { label: "Window", resetsAt: null, durationMs: SEVEN_DAYS_MS },
+      percent: 1.3,
+      models: ["Gemini Flash", "Gemini Pro"],
+    });
+    const claude = quota({
+      id: "bucket-3p-5h",
+      label: "Plan pool · Session",
+      group: "Claude and GPT models",
+      window: { label: "Window", resetsAt: null, durationMs: FIVE_HOURS_MS },
+      percent: 100,
+      models: ["Claude Opus", "Claude Sonnet", "GPT-OSS"],
+    });
+    const readings = [argon, flashSession, flashWeekly, claude];
+
+    expect(selectPillReading(readings, null, "gemini-3.8-flash-high")).toBe(flashSession);
+    expect(selectPillReading(readings, null, "gemini-4-argon-high")).toBe(argon);
+    expect(selectPillReading(readings, null, "claude-opus-5-5")).toBe(claude);
+    expect(selectPillReading(readings, null, "gpt-oss-120b")).toBe(claude);
+  });
+
+  // A model the vendor lists nowhere keeps the unscoped rule. Guessing which
+  // pool an unlisted model bills to would be worse than the old behaviour.
+  test("a model the vendor does not list falls back to the unscoped rule", () => {
+    const argon = quota({
+      id: "bucket-argon",
+      window: { label: "Window", resetsAt: null, durationMs: SEVEN_DAYS_MS },
+      percent: 99.6,
+      models: ["Gemini 4 Argon"],
+    });
+    const flash = quota({
+      id: "bucket-gemini-5h",
+      window: { label: "Window", resetsAt: null, durationMs: FIVE_HOURS_MS },
+      percent: 0,
+      models: ["Gemini Flash", "Gemini Pro"],
+    });
+
+    expect(selectPillReading([flash, argon], null, "gemini-5-ultra")).toBe(flash);
+  });
+
+  test("a pinned reading stays pinned whatever model is selected", () => {
+    const argon = quota({
+      id: "bucket-argon",
+      percent: 99.6,
+      models: ["Gemini 4 Argon"],
+    });
+    const flash = quota({ id: "bucket-gemini", percent: 0, models: ["Gemini Flash"] });
+
+    expect(selectPillReading([flash, argon], "bucket-argon", "gemini-3.8-flash")).toBe(argon);
+  });
+
+  test("a reading that names no models is a shared pool and stays eligible", () => {
+    const shared = quota({
+      id: "shared",
+      window: { label: "Session", resetsAt: null, durationMs: FIVE_HOURS_MS },
+      percent: 10,
+    });
+    const otherModel = quota({
+      id: "other",
+      window: { label: "Weekly", resetsAt: null, durationMs: SEVEN_DAYS_MS },
+      percent: 90,
+      models: ["Gemini 4 Argon"],
+    });
+
+    expect(selectPillReading([otherModel, shared], null, "gemini-3.8-flash")).toBe(shared);
+  });
 });
 
 describe("pillMetrics quota", () => {

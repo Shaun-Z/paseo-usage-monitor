@@ -287,12 +287,15 @@ Days are evaluated in the schedule's own `timeZone`, not the daemon's, so a band
 
 Projects one reading per element of an array, for vendors that report a variable number of buckets — one per model, one per limit. Every other path in the mapping becomes **relative to the element**.
 
-| Field       | Type      | Required | Notes                                         |
-| ----------- | --------- | -------- | --------------------------------------------- |
-| `path`      | JSON path | yes      | Path to the array, from the document root.    |
-| `idPath`    | JSON path | no       | Per-element id part, relative to the element. |
-| `labelPath` | JSON path | no       | Per-element label.                            |
-| `groupPath` | JSON path | no       | Per-element group.                            |
+| Field        | Type      | Required | Notes                                            |
+| ------------ | --------- | -------- | ------------------------------------------------ |
+| `path`       | JSON path | yes      | Path to the array, from the document root.       |
+| `idPath`     | JSON path | no       | Per-element id part, relative to the element.    |
+| `labelPath`  | JSON path | no       | Per-element label.                               |
+| `groupPath`  | JSON path | no       | Per-element group.                               |
+| `where`      | object    | no       | Keeps elements whose path equals `equals`.       |
+| `maxByPath`  | JSON path | no       | Keeps the single element with the highest value. |
+| `modelsPath` | JSON path | no       | Per-element model names the bucket serves.       |
 
 ## Source
 

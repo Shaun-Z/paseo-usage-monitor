@@ -784,8 +784,17 @@ function trackedAmounts(provider: UsageProviderSnapshot, metrics: PillMetrics): 
  */
 const pillIcons = new Map<string, ComponentType<PluginButtonIconProps>>();
 
-export function pillIconFor(providerId: string): ComponentType<PluginButtonIconProps> {
-  const existing = pillIcons.get(providerId);
+/** One cached component per provider and agent model, so a poll reuses it. */
+function pillVariantKey(providerId: string, model: string | null): string {
+  return `${providerId}\u0000${model ?? ""}`;
+}
+
+export function pillIconFor(
+  providerId: string,
+  model: string | null = null,
+): ComponentType<PluginButtonIconProps> {
+  const key = pillVariantKey(providerId, model);
+  const existing = pillIcons.get(key);
   if (existing !== undefined) {
     return existing;
   }
@@ -804,7 +813,7 @@ export function pillIconFor(providerId: string): ComponentType<PluginButtonIconP
     const reading =
       provider === null || settings === null
         ? null
-        : selectPillReading(provider.readings, settings.reading);
+        : selectPillReading(provider.readings, settings.reading, model);
     const metrics = reading === null || settings === null ? null : pillMetrics(reading, settings);
     // The tone carries the provider's own health, so a failed fetch reads as
     // danger whatever the last number said.
@@ -860,7 +869,7 @@ export function pillIconFor(providerId: string): ComponentType<PluginButtonIconP
     );
   }
   UsagePillIcon.displayName = `UsagePillIcon(${providerId})`;
-  pillIcons.set(providerId, UsagePillIcon);
+  pillIcons.set(key, UsagePillIcon);
   return UsagePillIcon;
 }
 
@@ -869,8 +878,12 @@ export function pillIconFor(providerId: string): ComponentType<PluginButtonIconP
  */
 const pillContents = new Map<string, ComponentType<PluginButtonContentProps>>();
 
-export function pillContentFor(providerId: string): ComponentType<PluginButtonContentProps> {
-  const existing = pillContents.get(providerId);
+export function pillContentFor(
+  providerId: string,
+  model: string | null = null,
+): ComponentType<PluginButtonContentProps> {
+  const key = pillVariantKey(providerId, model);
+  const existing = pillContents.get(key);
   if (existing !== undefined) {
     return existing;
   }
@@ -887,7 +900,7 @@ export function pillContentFor(providerId: string): ComponentType<PluginButtonCo
     const reading =
       provider === null || settings === null
         ? null
-        : selectPillReading(provider.readings, settings.reading);
+        : selectPillReading(provider.readings, settings.reading, model);
     const metrics = reading === null || settings === null ? null : pillMetrics(reading, settings);
     const tone =
       provider?.status === "error"
@@ -915,7 +928,7 @@ export function pillContentFor(providerId: string): ComponentType<PluginButtonCo
     );
   }
   UsagePillCard.displayName = `UsagePillCard(${providerId})`;
-  pillContents.set(providerId, UsagePillCard);
+  pillContents.set(key, UsagePillCard);
   return UsagePillCard;
 }
 
@@ -947,11 +960,15 @@ function composerPillLabel(
 }
 
 /** The label for one entry, from the snapshot the poll last published. */
-function entryLabel(provider: UsageProviderSnapshot | null, entry: ComposerPillEntry): string {
+function entryLabel(
+  provider: UsageProviderSnapshot | null,
+  entry: ComposerPillEntry,
+  model: string | null,
+): string {
   if (provider === null) {
     return entry.providerLabel;
   }
-  const reading = selectPillReading(provider.readings, entry.settings.reading);
+  const reading = selectPillReading(provider.readings, entry.settings.reading, model);
   const metrics = reading === null ? null : pillMetrics(reading, entry.settings);
   return composerPillLabel(provider, entry.settings, metrics);
 }
@@ -967,6 +984,8 @@ interface Registration {
   workspaceId: string;
   title: string;
   label: string;
+  /** The agent model the icon and popover were built for. */
+  model: string | null;
 }
 
 interface AgentSelection {
@@ -1018,6 +1037,7 @@ interface WantedPill {
   entry: ComposerPillEntry;
   title: string;
   label: string;
+  model: string | null;
 }
 
 /**
@@ -1060,7 +1080,8 @@ export function contributeComposerPills(client: PluginClientContext): () => void
           workspaceId: selection.workspaceId,
           entry,
           title: `${entry.providerLabel} usage`,
-          label: entryLabel(findProvider(providers, entry.providerId), entry),
+          label: entryLabel(findProvider(providers, entry.providerId), entry, selection.model),
+          model: selection.model,
         });
       }
     }
@@ -1081,12 +1102,24 @@ export function contributeComposerPills(client: PluginClientContext): () => void
         registration.handle.update({ label: target.label });
         registration.label = target.label;
       }
+      // A different model can change which pool the pill tracks, and the icon
+      // captures that choice, so the button is rebuilt for the new model.
+      if (registration.model !== target.model) {
+        registration.handle.update({
+          icon: pillIconFor(target.entry.providerId, target.model),
+          behavior: {
+            kind: "popover",
+            Content: pillContentFor(target.entry.providerId, target.model),
+          },
+        });
+        registration.model = target.model;
+      }
     }
     for (const [key, target] of wanted) {
       if (registrations.has(key)) {
         continue;
       }
-      const { agentId, workspaceId, entry, title, label } = target;
+      const { agentId, workspaceId, entry, title, label, model } = target;
       const handle = client.addComposerPill({
         id: composerPillId(entry.providerId),
         workspaceId,
@@ -1094,13 +1127,13 @@ export function contributeComposerPills(client: PluginClientContext): () => void
         button: {
           title,
           label,
-          icon: pillIconFor(entry.providerId),
+          icon: pillIconFor(entry.providerId, model),
           // The host anchors, contains, scrolls and dismisses this popover;
           // the card draws its body and nothing around it.
-          behavior: { kind: "popover", Content: pillContentFor(entry.providerId) },
+          behavior: { kind: "popover", Content: pillContentFor(entry.providerId, model) },
         },
       });
-      registrations.set(key, { handle, workspaceId, title, label });
+      registrations.set(key, { handle, workspaceId, title, label, model });
     }
   }
 

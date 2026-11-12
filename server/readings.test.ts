@@ -613,6 +613,47 @@ describe("projectReadings each", () => {
     });
   });
 
+  test("carries the model names a bucket lists so the rail can scope it", () => {
+    const scoped: UsageQuotaMapping = {
+      kind: "quota",
+      id: "bucket",
+      label: "Plan pool",
+      unit: "percent",
+      each: {
+        path: "buckets",
+        idPath: "id",
+        labelPath: "label",
+        groupPath: "group",
+        modelsPath: "models",
+      },
+      percentPath: "used",
+    };
+    const document = {
+      buckets: [
+        {
+          id: "argon",
+          label: "Argon",
+          group: "Gemini 4 Argon",
+          used: 99,
+          models: ["Gemini 4 Argon"],
+        },
+        {
+          id: "flash",
+          label: "Flash",
+          group: "Gemini Models",
+          used: 1,
+          models: ["Gemini Flash", "Gemini Pro"],
+        },
+        { id: "shared", label: "Shared", group: null, used: 5 },
+      ],
+    };
+
+    const readings = project([scoped], document);
+    expect(readings[0]).toMatchObject({ models: ["Gemini 4 Argon"] });
+    expect(readings[1]).toMatchObject({ models: ["Gemini Flash", "Gemini Pro"] });
+    expect(readings[2]).not.toHaveProperty("models");
+  });
+
   test("falls back to index-based identity and the mapping group", () => {
     const bare: UsageBalanceMapping = {
       kind: "balance",

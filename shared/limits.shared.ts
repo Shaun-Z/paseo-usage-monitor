@@ -259,6 +259,13 @@ export const UsageEachMappingSchema = z.object({
    * first.
    */
   maxByPath: z.string().min(1).optional(),
+  /**
+   * Where an element lists the models that share its bucket, as the vendor
+   * names them: Antigravity's group description says `Models within this group:
+   * Gemini Flash, Gemini Pro`. The rail uses it to track the pool that serves
+   * the agent's current model instead of whichever pool is closest to empty.
+   */
+  modelsPath: z.string().min(1).optional(),
 });
 
 /**
@@ -539,6 +546,11 @@ export const UsageQuotaReadingSchema = UsageReadingCommonOutputSchema.extend({
   remaining: z.number().nullable(),
   /** 0-100 consumed, from a percent path or derived from whichever pair resolved. */
   percent: z.number().nullable(),
+  /**
+   * Vendor model names that share this bucket, when the mapping supplies them.
+   * Absent or null is a shared pool and the rail may always track it.
+   */
+  models: z.array(z.string()).nullable().optional(),
 });
 
 export const UsageBalanceReadingSchema = UsageReadingCommonOutputSchema.extend({

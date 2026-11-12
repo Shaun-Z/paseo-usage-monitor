@@ -1764,7 +1764,16 @@ const PRESET_DEFINITIONS: Record<string, UsageProvider> = {
         id: "bucket",
         label: "Plan pool",
         unit: "percent",
-        each: { path: "buckets", idPath: "id", labelPath: "label", groupPath: "group" },
+        each: {
+          path: "buckets",
+          idPath: "id",
+          labelPath: "label",
+          groupPath: "group",
+          // The vendor names the models each pool serves in its group
+          // description; the rail uses that to track the pool for the model the
+          // agent selected, not whichever pool is closest to running out.
+          modelsPath: "models",
+        },
         percentPath: "usedPercent",
         // The probe returns 5-hour and weekly buckets in one array, so there is
         // no single durationMs to give: a fixed length would be wrong for half

@@ -62,6 +62,13 @@ export interface AntigravityQuotaBucket {
   usedPercent: number | null;
   resetsAt: string | null;
   durationMs?: number;
+  /**
+   * The models the vendor says share this bucket, as its group description
+   * names them (`Models within this group: Gemini Flash, Gemini Pro`). The rail
+   * uses them to stop one model's separate quota — Gemini 4 Argon — from
+   * standing in for the model the agent actually selected.
+   */
+  models?: string[];
 }
 
 export interface AntigravityQuota {
@@ -1193,6 +1200,41 @@ async function acquireAccessToken(deadline: ProbeDeadline): Promise<string> {
 // ---------------------------------------------------------------------------
 
 /**
+ * The vendor writes the models a bucket serves into the group description:
+ * `Models within this group: Gemini Flash, Gemini Pro`. Reading it beats any
+ * guess from a bucket id, and a group that names none stays a shared pool.
+ */
+export function parseGroupModels(description: unknown): string[] | null {
+  if (typeof description !== "string") return null;
+  const prefix = /models within this group:\s*/i.exec(description);
+  if (prefix === null) return null;
+  const names = description
+    .slice(prefix.index + prefix[0].length)
+    .split(",")
+    .map((name) =>
+      name
+        .trim()
+        .replace(/[.;]+$/, "")
+        .trim(),
+    )
+    .filter((name) => name !== "");
+  return names.length === 0 ? null : names;
+}
+
+/**
+ * The separate paid pools — Gemini 4 Argon is the live one — carry no model
+ * list in their description, only a heading that is the model's own name. A
+ * heading that talks about "models" is the generic family pool and stays
+ * shared; anything else names the model it meters.
+ */
+export function groupNameModels(name: string | null): string[] | null {
+  if (name === null) return null;
+  const trimmed = name.trim();
+  if (trimmed === "" || /\bmodels?\b/i.test(trimmed)) return null;
+  return [trimmed];
+}
+
+/**
  * Maps the `retrieveUserQuotaSummary` payload onto the fixed bucket list.
  * The service reports what is *left*; the plugin reads what is *used*.
  */
@@ -1205,32 +1247,50 @@ export function mapQuotaSummary(
   const root = asRecord(document);
   const groups = Array.isArray(root?.groups) ? root.groups : [];
 
-  const byId = new Map<string, { bucket: Record<string, unknown>; group: string | null }>();
+  const byId = new Map<
+    string,
+    { bucket: Record<string, unknown>; group: string | null; models: string[] | null }
+  >();
   for (const rawGroup of groups) {
     const group = asRecord(rawGroup);
     if (group === null) continue;
     const groupName = typeof group.displayName === "string" ? group.displayName : null;
+    const models = parseGroupModels(group.description) ?? groupNameModels(groupName);
     const buckets = Array.isArray(group.buckets) ? group.buckets : [];
     for (const rawBucket of buckets) {
       const bucket = asRecord(rawBucket);
       const id = bucket === null ? null : bucket.bucketId;
       if (typeof id !== "string" || byId.has(id)) continue;
-      byId.set(id, { bucket: bucket as Record<string, unknown>, group: groupName });
+      byId.set(id, { bucket: bucket as Record<string, unknown>, group: groupName, models });
     }
   }
 
   // Keep the original four slots for configurations that address buckets by
   // index, then append every new vendor bucket without an allowlist.
-  const definitions: { id: string; label: string; group: string | null; durationMs?: number }[] = [
-    ...KNOWN_BUCKETS,
-  ];
-  for (const [id, { bucket, group }] of byId) {
+  const definitions: {
+    id: string;
+    label: string;
+    group: string | null;
+    durationMs?: number;
+    models: string[] | null;
+  }[] = [];
+  for (const known of KNOWN_BUCKETS) {
+    definitions.push({
+      id: known.id,
+      label: known.label,
+      group: known.group,
+      durationMs: known.durationMs,
+      models: byId.get(known.id)?.models ?? null,
+    });
+  }
+  for (const [id, { bucket, group, models }] of byId) {
     if (definitions.some((known) => known.id === id)) continue;
     const window = bucket.window;
     definitions.push({
       id,
       label: firstString(bucket, ["displayName"]) ?? id,
       group,
+      models,
       ...(window === "5h"
         ? { durationMs: FIVE_HOURS_MS }
         : window === "weekly" || window === "7d"
@@ -1238,26 +1298,30 @@ export function mapQuotaSummary(
           : {}),
     });
   }
-  const buckets = definitions.map(({ id, label, group, durationMs }) => {
-    const found = byId.get(id);
-    const remaining = found === undefined ? null : found.bucket.remainingFraction;
-    const resetTime = found === undefined ? null : found.bucket.resetTime;
-    const groupName = found?.group ?? group;
-    return {
-      id,
-      label,
-      // The plan rides on the group heading, because that is where a reader
-      // looks when a bar reads 0% and they want to know why.
-      group: tier === null ? groupName : `${groupName} · ${tier}`,
-      usedPercent:
-        typeof remaining === "number" && Number.isFinite(remaining)
-          ? Math.min(100, Math.max(0, (1 - remaining) * 100))
-          : null,
-      resetsAt:
-        typeof resetTime === "string" && !Number.isNaN(Date.parse(resetTime)) ? resetTime : null,
-      durationMs,
-    };
-  });
+  const buckets: AntigravityQuotaBucket[] = definitions.map(
+    ({ id, label, group, durationMs, models }) => {
+      const found = byId.get(id);
+      const remaining = found === undefined ? null : found.bucket.remainingFraction;
+      const resetTime = found === undefined ? null : found.bucket.resetTime;
+      const groupName = found?.group ?? group;
+      const bucket: AntigravityQuotaBucket = {
+        id,
+        label,
+        // The plan rides on the group heading, because that is where a reader
+        // looks when a bar reads 0% and they want to know why.
+        group: tier === null ? groupName : `${groupName} · ${tier}`,
+        usedPercent:
+          typeof remaining === "number" && Number.isFinite(remaining)
+            ? Math.min(100, Math.max(0, (1 - remaining) * 100))
+            : null,
+        resetsAt:
+          typeof resetTime === "string" && !Number.isNaN(Date.parse(resetTime)) ? resetTime : null,
+        durationMs,
+      };
+      if (models !== null) bucket.models = models;
+      return bucket;
+    },
+  );
 
   return { source, fetchedAt, tier, buckets };
 }
@@ -1416,6 +1480,7 @@ export function parseAgyUsage(stdout: string, fetchedAt: string): AntigravityQuo
     return {
       displayName:
         group === null ? null : firstString(group, ["display_name", "displayName", "name"]),
+      description: group?.description,
       buckets: (Array.isArray(group?.buckets) ? group.buckets : []).map((rawBucket) => {
         const bucket = asRecord(rawBucket);
         return {

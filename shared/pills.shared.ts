@@ -278,6 +278,35 @@ function preferredReading(left: UsagePillReading, right: UsagePillReading): Usag
 }
 
 /**
+ * The tokens of a model or vendor model name, lowercased: `gemini-4-argon-high`
+ * and `Gemini 4 Argon` both become their words, so a version or thinking suffix
+ * on the model does not stop it matching the vendor's shorter group name.
+ */
+function modelTokens(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token !== "");
+}
+
+/**
+ * Whether a bucket belongs to the model the agent is using. A reading that
+ * names no models is a shared pool and stays eligible; one that names models is
+ * eligible when every one of a name's tokens appears in the model id, so
+ * `Gemini Flash` matches `gemini-3.8-flash-high` and `Gemini 4 Argon` does not.
+ */
+function readingServesModel(reading: UsagePillReading, model: string): boolean {
+  if (reading.kind !== "quota" || reading.models === undefined || reading.models === null) {
+    return true;
+  }
+  const tokens = modelTokens(model);
+  return reading.models.some((name) => {
+    const nameTokens = modelTokens(name);
+    return nameTokens.length > 0 && nameTokens.every((token) => tokens.includes(token));
+  });
+}
+
+/**
  * Without a pinned id the pill tracks the reading that answers "how close am I
  * to running out". A reading whose vendor publishes no ceiling can state an
  * amount but never a percentage, so it cannot fill a gauge and is only ever a
@@ -285,10 +314,18 @@ function preferredReading(left: UsagePillReading, right: UsagePillReading): Usag
  * beside them, and picking one of those left the rail with nothing to draw.
  * A provider with no quota at all falls back to its balance, which is what an
  * API-credit account has instead.
+ *
+ * A vendor that meters models separately — Antigravity sells Gemini, Claude/GPT
+ * and Gemini 4 Argon out of three pools — must not let a tight pool for another
+ * model hijack the rail. When the agent's model is known, readings that name
+ * their models are filtered to the ones that serve it; a model the vendor does
+ * not list keeps every candidate, because guessing would be worse than the old
+ * "closest to running out" rule.
  */
 export function selectPillReading(
   readings: readonly UsageReading[],
   preferredId: string | null,
+  model: string | null = null,
 ): UsagePillReading | null {
   const candidates = readings.filter(isPillReading);
   if (candidates.length === 0) {
@@ -302,7 +339,8 @@ export function selectPillReading(
   }
   const measured = candidates.filter((reading) => readingPercentUsed(reading) !== null);
   const pool = measured.length > 0 ? measured : candidates;
-  return pool.reduce(preferredReading);
+  const scoped = model === null ? [] : pool.filter((reading) => readingServesModel(reading, model));
+  return (scoped.length > 0 ? scoped : pool).reduce(preferredReading);
 }
 
 export interface PillMetrics {

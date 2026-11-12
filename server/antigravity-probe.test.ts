@@ -7,7 +7,9 @@ import {
   findOAuthClientMatches,
   isAccessTokenUsable,
   isOAuthCacheFresh,
+  groupNameModels,
   mapQuotaSummary,
+  parseGroupModels,
   parseStoredCredential,
   readTierId,
   readTierLabel,
@@ -448,6 +450,37 @@ describe("runPhase", () => {
   });
 });
 
+describe("parseGroupModels", () => {
+  test("reads the model list the vendor writes into a group description", () => {
+    expect(parseGroupModels("Models within this group: Gemini Flash, Gemini Pro")).toEqual([
+      "Gemini Flash",
+      "Gemini Pro",
+    ]);
+    expect(
+      parseGroupModels("Models within this group: Claude Opus, Claude Sonnet, GPT-OSS."),
+    ).toEqual(["Claude Opus", "Claude Sonnet", "GPT-OSS"]);
+  });
+
+  test("leaves a group that names no models as a shared pool", () => {
+    expect(parseGroupModels(undefined)).toBeNull();
+    expect(parseGroupModels("For paid Pro plans, Argon quota is separate.")).toBeNull();
+    expect(parseGroupModels("Models within this group:")).toBeNull();
+  });
+});
+
+describe("groupNameModels", () => {
+  test("a heading that is a model's own name scopes the pool it meters", () => {
+    expect(groupNameModels("Gemini 4 Argon")).toEqual(["Gemini 4 Argon"]);
+  });
+
+  test("a heading that talks about models is the generic family pool", () => {
+    expect(groupNameModels("Gemini Models")).toBeNull();
+    expect(groupNameModels("Claude and GPT models")).toBeNull();
+    expect(groupNameModels("")).toBeNull();
+    expect(groupNameModels(null)).toBeNull();
+  });
+});
+
 describe("mapQuotaSummary", () => {
   test("reports the recorded summary as used percentages in a fixed order", () => {
     expect(mapQuotaSummary(QUOTA_SUMMARY, SOURCE, FETCHED_AT)).toEqual({
@@ -462,6 +495,7 @@ describe("mapQuotaSummary", () => {
           usedPercent: (1 - 0.9077114) * 100,
           resetsAt: "2026-08-28T22:11:13Z",
           durationMs: 18_000_000,
+          models: ["Gemini Flash", "Gemini Pro"],
         },
         {
           id: "gemini-weekly",
@@ -470,6 +504,7 @@ describe("mapQuotaSummary", () => {
           usedPercent: (1 - 0.7494267) * 100,
           resetsAt: "2026-09-01T20:00:00Z",
           durationMs: 604_800_000,
+          models: ["Gemini Flash", "Gemini Pro"],
         },
         {
           id: "3p-5h",
@@ -478,6 +513,7 @@ describe("mapQuotaSummary", () => {
           usedPercent: 0,
           resetsAt: "2026-08-28T22:51:48Z",
           durationMs: 18_000_000,
+          models: ["Claude Opus", "Claude Sonnet", "GPT-OSS"],
         },
         {
           id: "3p-weekly",
@@ -486,6 +522,7 @@ describe("mapQuotaSummary", () => {
           usedPercent: 0,
           resetsAt: "2026-09-04T17:51:48Z",
           durationMs: 604_800_000,
+          models: ["Claude Opus", "Claude Sonnet", "GPT-OSS"],
         },
       ],
     });
@@ -552,6 +589,34 @@ describe("mapQuotaSummary", () => {
       groups: [{ buckets: [{ bucketId: "gemini-5h", remainingFraction: 0.5, resetTime: "soon" }] }],
     };
     expect(mapQuotaSummary(bad, SOURCE, FETCHED_AT).buckets[0]?.resetsAt).toBeNull();
+  });
+
+  test("scopes a model-specific pool whose heading names no model list", () => {
+    const argon = {
+      groups: [
+        {
+          displayName: "Gemini 4 Argon",
+          description: "For paid Pro plans, Argon quota is separate.",
+          buckets: [
+            {
+              bucketId: "gemini-argon-wtu-weekly",
+              displayName: "Gemini 4 Argon Weekly Limit",
+              window: "weekly",
+              remainingFraction: 0.003686,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = mapQuotaSummary(argon, SOURCE, FETCHED_AT);
+    expect(result.buckets).toHaveLength(5);
+    expect(result.buckets[4]).toMatchObject({
+      id: "gemini-argon-wtu-weekly",
+      group: "Gemini 4 Argon",
+      models: ["Gemini 4 Argon"],
+      durationMs: 604_800_000,
+    });
   });
 
   test("yields four null readings for a payload with no groups at all", () => {
