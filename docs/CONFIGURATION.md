@@ -211,6 +211,7 @@ One entry covers every row that reading projects, including each `each` element.
 | Field             | Type      | Required | Notes                                                                                |
 | ----------------- | --------- | -------- | ------------------------------------------------------------------------------------ |
 | `label`           | string    | yes      | Names the bucket: `"Session"`, `"Weekly"`.                                           |
+| `labelPath`       | JSON path | no       | Names the bucket from the response; wins over `label` when it resolves.              |
 | `resetsAtPath`    | JSON path | no       | ISO timestamp, epoch seconds, or epoch milliseconds; all normalise to an ISO string. |
 | `resetsInSecPath` | JSON path | no       | Seconds from the injected reading time; used when `resetsAtPath` does not resolve.   |
 | `durationMs`      | integer   | no       | How long the window lasts, as a literal.                                             |

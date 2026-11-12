@@ -344,13 +344,18 @@ export function selectPillReading(
 }
 
 export interface PillMetrics {
+  /** The exact reading this came from, so a duplicate label cannot mislead a skip. */
+  readingId: string;
+  /** Mapping label, e.g. "Plan pool · Session". */
+  readingLabel: string;
+  /** Group-qualified name, e.g. "Gemini Models · Session". */
+  readingName: string;
   /** 0-100 consumed. Drives the threshold tone even when the gauge draws headroom. */
   percentUsed: number | null;
   /** 0-100 the gauge draws, already in the configured direction. */
   percentFilled: number | null;
   /** The number beside the gauge, already in the configured direction. */
   readout: string | null;
-  readingLabel: string;
   /** "Session", "Weekly", and the like. Null for a balance. */
   windowLabel: string | null;
   resetsAt: string | null;
@@ -427,6 +432,17 @@ function readoutText(
   return amountText(reading, settings);
 }
 
+/**
+ * The name a row needs when two groups publish the same window label. The
+ * vendor's group is the pool ("Gemini Models", "Claude and GPT models"), so
+ * prefixing it is what tells two "Session" rows apart.
+ */
+function pillReadingName(reading: UsagePillReading, windowLabel: string | null): string {
+  if (reading.group === null) return reading.label;
+  const base = windowLabel === null || windowLabel === "" ? reading.label : windowLabel;
+  return `${reading.group} · ${base}`;
+}
+
 export function pillMetrics(
   reading: UsagePillReading,
   settings: ResolvedPillSettings,
@@ -437,12 +453,15 @@ export function pillMetrics(
     percentFilled = settings.value === "used" ? percentUsed : 100 - percentUsed;
   }
   const window = reading.kind === "quota" ? reading.window : null;
+  const windowLabel = window?.label ?? null;
   return {
+    readingId: reading.id,
+    readingLabel: reading.label,
+    readingName: pillReadingName(reading, windowLabel),
     percentUsed,
     percentFilled,
     readout: readoutText(reading, settings, percentFilled),
-    readingLabel: reading.label,
-    windowLabel: window?.label ?? null,
+    windowLabel,
     resetsAt: window?.resetsAt ?? null,
   };
 }
@@ -517,7 +536,10 @@ export function usageWindowRows(
             : " used";
     rows.push({
       id: reading.id,
-      name: reading.label.trim() === "" ? (metrics.windowLabel ?? reading.id) : reading.label,
+      name:
+        metrics.readingName.trim() === ""
+          ? (metrics.windowLabel ?? reading.id)
+          : metrics.readingName,
       readout: `${metrics.readout}${suffix}`,
       percentUsed: metrics.percentUsed,
       percentFilled: metrics.percentFilled,

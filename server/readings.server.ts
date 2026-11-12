@@ -144,7 +144,11 @@ function resolveWindow(
     }
   }
   const durationMs = window.durationMs ?? readAmount(document, window.durationMsPath);
-  return { label: window.label, resetsAt, durationMs };
+  return {
+    label: readNonEmptyString(document, window.labelPath) ?? window.label,
+    resetsAt,
+    durationMs,
+  };
 }
 
 function projectQuota(

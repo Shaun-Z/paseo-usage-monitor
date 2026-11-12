@@ -1777,8 +1777,14 @@ const PRESET_DEFINITIONS: Record<string, UsageProvider> = {
         percentPath: "usedPercent",
         // The probe returns 5-hour and weekly buckets in one array, so there is
         // no single durationMs to give: a fixed length would be wrong for half
-        // of them. These bars show a reset time and no pace marker.
-        window: { label: "Window", resetsAtPath: "resetsAt", durationMsPath: "durationMs" },
+        // of them. Each bucket states its own window, so the row is named
+        // "Session" or "Weekly" rather than a generic "Window".
+        window: {
+          label: "Window",
+          labelPath: "windowLabel",
+          resetsAtPath: "resetsAt",
+          durationMsPath: "durationMs",
+        },
       },
     ],
   }),

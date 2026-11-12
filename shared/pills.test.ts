@@ -904,6 +904,43 @@ describe("usageWindowRows", () => {
     expect(rows.map((row) => row.id)).toEqual(["weekly"]);
   });
 
+  // The reported defect: two pools publish a reading labelled "Plan pool ·
+  // Session", and the skip matched by label, so removing the tracked 3p row
+  // actually removed the Gemini one and left the tracked row in the list.
+  test("skips by reading id, not by a label two pools share", () => {
+    const readings = [
+      quota({ id: "gemini-session", label: "Plan pool · Session", group: "Gemini Models" }),
+      quota({
+        id: "3p-session",
+        label: "Plan pool · Session",
+        group: "Claude and GPT models",
+      }),
+    ];
+
+    const rows = usageWindowRows(readings, "3p-session");
+
+    expect(rows.map((row) => row.id)).toEqual(["gemini-session"]);
+  });
+
+  test("qualifies a row with the pool when the window name is shared", () => {
+    const rows = usageWindowRows(
+      [
+        quota({ id: "gemini-session", label: "Plan pool · Session", group: "Gemini Models" }),
+        quota({
+          id: "3p-session",
+          label: "Plan pool · Session",
+          group: "Claude and GPT models",
+        }),
+      ],
+      null,
+    );
+
+    expect(rows.map((row) => row.name)).toEqual([
+      "Gemini Models · Session",
+      "Claude and GPT models · Session",
+    ]);
+  });
+
   test("carries the geometry each row needs to draw its own bar", () => {
     const [row] = usageWindowRows([quota({ id: "weekly", percent: 39 })], null);
 

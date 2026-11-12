@@ -13,6 +13,7 @@ import {
   parseStoredCredential,
   readTierId,
   readTierLabel,
+  windowLabelOf,
   runPhase,
   startDeadline,
 } from "./antigravity-probe.server";
@@ -468,6 +469,16 @@ describe("parseGroupModels", () => {
   });
 });
 
+describe("windowLabelOf", () => {
+  test("names the vendor's window codes for a row", () => {
+    expect(windowLabelOf("5h")).toBe("Session");
+    expect(windowLabelOf("weekly")).toBe("Weekly");
+    expect(windowLabelOf("7d")).toBe("Weekly");
+    expect(windowLabelOf("monthly")).toBeNull();
+    expect(windowLabelOf(undefined)).toBeNull();
+  });
+});
+
 describe("groupNameModels", () => {
   test("a heading that is a model's own name scopes the pool it meters", () => {
     expect(groupNameModels("Gemini 4 Argon")).toEqual(["Gemini 4 Argon"]);
@@ -495,6 +506,7 @@ describe("mapQuotaSummary", () => {
           usedPercent: (1 - 0.9077114) * 100,
           resetsAt: "2026-08-28T22:11:13Z",
           durationMs: 18_000_000,
+          windowLabel: "Session",
           models: ["Gemini Flash", "Gemini Pro"],
         },
         {
@@ -504,6 +516,7 @@ describe("mapQuotaSummary", () => {
           usedPercent: (1 - 0.7494267) * 100,
           resetsAt: "2026-09-01T20:00:00Z",
           durationMs: 604_800_000,
+          windowLabel: "Weekly",
           models: ["Gemini Flash", "Gemini Pro"],
         },
         {
@@ -513,6 +526,7 @@ describe("mapQuotaSummary", () => {
           usedPercent: 0,
           resetsAt: "2026-08-28T22:51:48Z",
           durationMs: 18_000_000,
+          windowLabel: "Session",
           models: ["Claude Opus", "Claude Sonnet", "GPT-OSS"],
         },
         {
@@ -522,6 +536,7 @@ describe("mapQuotaSummary", () => {
           usedPercent: 0,
           resetsAt: "2026-09-04T17:51:48Z",
           durationMs: 604_800_000,
+          windowLabel: "Weekly",
           models: ["Claude Opus", "Claude Sonnet", "GPT-OSS"],
         },
       ],
@@ -559,6 +574,7 @@ describe("mapQuotaSummary", () => {
       usedPercent: null,
       resetsAt: null,
       durationMs: 604_800_000,
+      windowLabel: "Weekly",
     });
   });
 
@@ -571,6 +587,7 @@ describe("mapQuotaSummary", () => {
       usedPercent: 50,
       resetsAt: null,
       durationMs: 18_000_000,
+      windowLabel: "Session",
     });
   });
 
@@ -616,6 +633,8 @@ describe("mapQuotaSummary", () => {
       group: "Gemini 4 Argon",
       models: ["Gemini 4 Argon"],
       durationMs: 604_800_000,
+      label: "Weekly",
+      windowLabel: "Weekly",
     });
   });
 

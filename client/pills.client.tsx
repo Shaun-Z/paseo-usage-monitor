@@ -395,9 +395,9 @@ function PillCard({
     <View style={styles.cardBody}>
       <View style={styles.cardRow}>
         <Text numberOfLines={1} style={styles.cardTitle}>
-          {metrics?.windowLabel === null || metrics === null
+          {metrics === null || metrics.readingName === ""
             ? provider.label
-            : `${provider.label} · ${metrics.windowLabel}`}
+            : `${provider.label} · ${metrics.readingName}`}
         </Text>
         <Pressable
           accessibilityLabel={`Refresh ${provider.label} usage`}
@@ -732,25 +732,20 @@ function trackedReadingWindow(
   if (metrics === null) {
     return null;
   }
-  const reading = provider.readings.find(
-    (candidate) => candidate.kind === "quota" && candidate.label === metrics.readingLabel,
-  );
+  const reading = provider.readings.find((candidate) => candidate.id === metrics.readingId);
   return reading !== undefined && reading.kind === "quota" ? reading.window : null;
 }
 
 function trackedReadingId(
-  provider: UsageProviderSnapshot,
+  _provider: UsageProviderSnapshot,
   metrics: PillMetrics | null,
 ): string | null {
-  if (metrics === null) {
-    return null;
-  }
-  return provider.readings.find((reading) => reading.label === metrics.readingLabel)?.id ?? null;
+  return metrics?.readingId ?? null;
 }
 
 /** "498k / 1m tokens" for the tracked reading, when the vendor states both sides. */
 function trackedAmounts(provider: UsageProviderSnapshot, metrics: PillMetrics): string | null {
-  const reading = provider.readings.find((candidate) => candidate.label === metrics.readingLabel);
+  const reading = provider.readings.find((candidate) => candidate.id === metrics.readingId);
   if (reading === undefined || reading.kind === "rate") {
     return null;
   }
@@ -948,7 +943,7 @@ function composerPillLabel(
     parts.push(provider.label);
   }
   if (settings.label === "reading" && metrics !== null) {
-    parts.push(metrics.readingLabel);
+    parts.push(metrics.readingName);
   }
   if (settings.readout === "percent" || settings.readout === "amount") {
     // A stale reading keeps its number: the last good one beats a dash, and

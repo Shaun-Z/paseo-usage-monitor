@@ -301,6 +301,22 @@ describe("projectReadings window", () => {
     });
   });
 
+  test("reads the window label from the document when labelPath is set", () => {
+    const mapping: UsageQuotaMapping = {
+      kind: "quota",
+      id: "bucket",
+      label: "Plan pool",
+      unit: "percent",
+      window: { label: "Window", labelPath: "windowLabel" },
+      percentPath: "used",
+    };
+
+    expect(project([mapping], { windowLabel: "Session", used: 5 })[0]).toMatchObject({
+      window: { label: "Session" },
+    });
+    expect(project([mapping], { used: 5 })[0]).toMatchObject({ window: { label: "Window" } });
+  });
+
   test("passes a literal durationMs through and reads durationMsPath otherwise", () => {
     const literal: UsageQuotaMapping = {
       kind: "quota",

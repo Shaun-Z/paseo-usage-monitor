@@ -62,6 +62,8 @@ export interface AntigravityQuotaBucket {
   usedPercent: number | null;
   resetsAt: string | null;
   durationMs?: number;
+  /** The vendor's own window name, `Session` or `Weekly`, when it states one. */
+  windowLabel?: string;
   /**
    * The models the vendor says share this bucket, as its group description
    * names them (`Models within this group: Gemini Flash, Gemini Pro`). The rail
@@ -1221,6 +1223,13 @@ export function parseGroupModels(description: unknown): string[] | null {
   return names.length === 0 ? null : names;
 }
 
+/** `agy` states a bucket's window as `5h` or `weekly`; name it for a reader. */
+export function windowLabelOf(window: unknown): string | null {
+  if (window === "5h") return "Session";
+  if (window === "weekly" || window === "7d") return "Weekly";
+  return null;
+}
+
 /**
  * The separate paid pools — Gemini 4 Argon is the live one — carry no model
  * list in their description, only a heading that is the model's own name. A
@@ -1249,7 +1258,12 @@ export function mapQuotaSummary(
 
   const byId = new Map<
     string,
-    { bucket: Record<string, unknown>; group: string | null; models: string[] | null }
+    {
+      bucket: Record<string, unknown>;
+      group: string | null;
+      models: string[] | null;
+      windowLabel: string | null;
+    }
   >();
   for (const rawGroup of groups) {
     const group = asRecord(rawGroup);
@@ -1261,7 +1275,12 @@ export function mapQuotaSummary(
       const bucket = asRecord(rawBucket);
       const id = bucket === null ? null : bucket.bucketId;
       if (typeof id !== "string" || byId.has(id)) continue;
-      byId.set(id, { bucket: bucket as Record<string, unknown>, group: groupName, models });
+      byId.set(id, {
+        bucket: bucket as Record<string, unknown>,
+        group: groupName,
+        models,
+        windowLabel: windowLabelOf(bucket?.window),
+      });
     }
   }
 
@@ -1273,24 +1292,31 @@ export function mapQuotaSummary(
     group: string | null;
     durationMs?: number;
     models: string[] | null;
+    windowLabel: string | null;
   }[] = [];
   for (const known of KNOWN_BUCKETS) {
+    const found = byId.get(known.id);
     definitions.push({
       id: known.id,
       label: known.label,
       group: known.group,
       durationMs: known.durationMs,
-      models: byId.get(known.id)?.models ?? null,
+      models: found?.models ?? null,
+      windowLabel:
+        found?.windowLabel ?? (known.durationMs === FIVE_HOURS_MS ? "Session" : "Weekly"),
     });
   }
-  for (const [id, { bucket, group, models }] of byId) {
+  for (const [id, { bucket, group, models, windowLabel }] of byId) {
     if (definitions.some((known) => known.id === id)) continue;
     const window = bucket.window;
     definitions.push({
       id,
-      label: firstString(bucket, ["displayName"]) ?? id,
+      // The group already names the pool; the window is what a row adds. Use
+      // the vendor's own display name only for a window we cannot name.
+      label: windowLabel ?? firstString(bucket, ["displayName"]) ?? id,
       group,
       models,
+      windowLabel,
       ...(window === "5h"
         ? { durationMs: FIVE_HOURS_MS }
         : window === "weekly" || window === "7d"
@@ -1299,7 +1325,7 @@ export function mapQuotaSummary(
     });
   }
   const buckets: AntigravityQuotaBucket[] = definitions.map(
-    ({ id, label, group, durationMs, models }) => {
+    ({ id, label, group, durationMs, models, windowLabel }) => {
       const found = byId.get(id);
       const remaining = found === undefined ? null : found.bucket.remainingFraction;
       const resetTime = found === undefined ? null : found.bucket.resetTime;
@@ -1319,6 +1345,7 @@ export function mapQuotaSummary(
         durationMs,
       };
       if (models !== null) bucket.models = models;
+      if (windowLabel !== null) bucket.windowLabel = windowLabel;
       return bucket;
     },
   );

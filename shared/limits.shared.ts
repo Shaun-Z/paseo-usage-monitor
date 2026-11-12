@@ -181,6 +181,12 @@ export const UsageSourceSchema = z.discriminatedUnion("kind", [
 /** Names the resetting window a quota belongs to: "Session", "Weekly". */
 export const UsageWindowMappingSchema = z.object({
   label: z.string().min(1),
+  /**
+   * Where the window names itself, relative to the same document the reading
+   * projects. Antigravity returns `5h` and `weekly` per bucket, so one mapping
+   * can label its rows "Session" and "Weekly" instead of the generic "Window".
+   */
+  labelPath: z.string().min(1).optional(),
   resetsAtPath: z.string().min(1).optional(),
   resetsInSecPath: z.string().min(1).optional(),
   /**
