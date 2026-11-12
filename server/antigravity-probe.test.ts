@@ -498,7 +498,7 @@ describe("mapQuotaSummary", () => {
       source: SOURCE,
       fetchedAt: FETCHED_AT,
       tier: null,
-      latestModel: null,
+      defaultModel: null,
       buckets: [
         {
           id: "gemini-5h",

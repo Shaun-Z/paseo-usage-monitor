@@ -48,8 +48,6 @@ export interface AntigravityClientAdapters {
   listStores(directory: string): string[];
   /** Usage-bearing steps in one store, newest first; empty when unreadable. */
   readStoreSteps(path: string, fromMs: number): AntigravityStepUsage[];
-  /** The model the newest generation in one store recorded, when it states one. */
-  readStoreModel?(path: string): string | null;
   now(): Date;
 }
 
@@ -153,39 +151,6 @@ function varintAt(bytes: Uint8Array, target: number): number | null {
     if (entry.field === target && entry.varint !== null) return entry.varint;
   }
   return null;
-}
-
-/**
- * The generation metadata is protobuf with no published schema. Two fields were
- * confirmed against live stores: the top-level generation message (1) carries
- * the display name at 21, and the execution message (3) carries the model id at
- * 28. The display name is preferred because it tokenises exactly like the pool
- * names the composer rail matches ("Gemini 4 Argon (High)" → "Gemini 4 Argon").
- */
-const GENERATION_FIELD = 1;
-const GENERATION_MODEL_FIELD = 21;
-const EXECUTION_FIELD = 3;
-const EXECUTION_MODEL_FIELD = 28;
-
-function textAt(bytes: Uint8Array, field: number): string | null {
-  for (const entry of protoFields(bytes)) {
-    if (entry.field !== field || entry.bytes === null) continue;
-    const text = Buffer.from(entry.bytes).toString("utf8").trim();
-    if (text !== "") return text;
-  }
-  return null;
-}
-
-/** The model the store's newest generation ran on, or null when it states none. */
-export function decodeGenerationModel(bytes: Uint8Array): string | null {
-  let display: string | null = null;
-  let id: string | null = null;
-  for (const entry of protoFields(bytes)) {
-    if (entry.bytes === null) continue;
-    if (entry.field === GENERATION_FIELD) display = textAt(entry.bytes, GENERATION_MODEL_FIELD);
-    if (entry.field === EXECUTION_FIELD) id = textAt(entry.bytes, EXECUTION_MODEL_FIELD);
-  }
-  return display ?? id;
 }
 
 /**
@@ -314,49 +279,13 @@ function readStoreStepsOnDisk(path: string, fromMs: number): AntigravityStepUsag
   return rows;
 }
 
-function readStoreModelOnDisk(path: string): string | null {
-  try {
-    const store = new DatabaseSync(path, { readOnly: true });
-    try {
-      const row = store.prepare("select data from gen_metadata order by idx desc limit 1").get() as
-        | { data?: unknown }
-        | undefined;
-      const blob = row?.data;
-      return blob instanceof Uint8Array ? decodeGenerationModel(blob) : null;
-    } finally {
-      store.close();
-    }
-  } catch {
-    // Not a store this build can open, or one with no generation metadata.
-    return null;
-  }
-}
-
 export function createNodeAntigravityClientAdapters(): AntigravityClientAdapters {
   return {
     homeDir: homedir(),
     listStores: listStoresOnDisk,
     readStoreSteps: readStoreStepsOnDisk,
-    readStoreModel: readStoreModelOnDisk,
     now() {
       return new Date();
     },
   };
-}
-
-/**
- * The model the `agy` CLI last ran, read from its newest conversation store.
- * The CLI's settings file records the model picker's value, which can lag the
- * model actually used in a session; the generation metadata is the record of
- * what ran. Falls back to nothing so the caller can try its own source.
- */
-export function readLatestAntigravityModel(
-  adapters: AntigravityClientAdapters = createNodeAntigravityClientAdapters(),
-): string | null {
-  const directory = join(adapters.homeDir, ".gemini", "antigravity-cli", "conversations");
-  for (const path of adapters.listStores(directory)) {
-    const model = adapters.readStoreModel?.(path) ?? null;
-    if (model !== null) return model;
-  }
-  return null;
 }

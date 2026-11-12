@@ -53,8 +53,6 @@ import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 import { promisify, stripVTControlCharacters } from "node:util";
 
-import { readLatestAntigravityModel } from "./antigravity-clients.server";
-
 const execFileAsync = promisify(execFile);
 
 export interface AntigravityQuotaBucket {
@@ -79,11 +77,11 @@ export interface AntigravityQuota {
   source: string;
   fetchedAt: string;
   /**
-   * The model the `agy` CLI last selected, from its own settings file. A
+   * The vendor's newest default model: the first id `agy models` lists. A
    * session on another harness has no Antigravity model to match, and this is
-   * the closest thing the vendor gives to "the model I was just using".
+   * the pool a fresh Antigravity session would start on.
    */
-  latestModel: string | null;
+  defaultModel: string | null;
   /**
    * The plan this login is on, as Google reports it. It belongs on the card
    * because it decides whether a bucket can move at all: only a paid plan
@@ -1369,7 +1367,7 @@ export function mapQuotaSummary(
     },
   );
 
-  return { source, fetchedAt, tier, latestModel: null, buckets };
+  return { source, fetchedAt, tier, defaultModel: null, buckets };
 }
 
 async function fetchQuotaSummary(
@@ -1551,8 +1549,8 @@ export interface AntigravityQuotaAdapters {
   runCli(signal: AbortSignal): Promise<string>;
   probeKeyring(): Promise<AntigravityQuota>;
   now(): Date;
-  /** The model the CLI last selected; absent on a caller that has no such file. */
-  readLatestModel?(): string | null;
+  /** The first model the CLI's catalog lists; absent on a caller with no CLI. */
+  readDefaultModel?(): Promise<string | null> | string | null;
 }
 
 async function runAgyUsage(signal: AbortSignal): Promise<string> {
@@ -1578,26 +1576,59 @@ async function runAgyUsage(signal: AbortSignal): Promise<string> {
   }
 }
 
-/** The model picker's value, which can lag the model that actually ran. */
-function readSettingsModel(): string | null {
-  const path = join(homedir(), ".gemini", "antigravity-cli", "settings.json");
-  try {
-    const document: unknown = JSON.parse(readFileSync(path, "utf8"));
-    if (typeof document !== "object" || document === null) return null;
-    const model = (document as Record<string, unknown>).model;
-    return typeof model === "string" && model.trim() !== "" ? model.trim() : null;
-  } catch {
-    return null;
-  }
+/** The catalog is a network read, so one answer lasts a day and a failure a while. */
+const MODEL_CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
+const MODEL_CATALOG_FAILURE_TTL_MS = 15 * 60 * 1000;
+const MODEL_CATALOG_TIMEOUT_MS = 6_000;
+
+interface DefaultModelCache {
+  value: string | null;
+  at: number;
+  ttl: number;
 }
 
+let defaultModelCache: DefaultModelCache | null = null;
+
 /**
- * The newest generation the CLI recorded is the model it actually ran, while
- * the settings file only records the picker. Prefer the former and keep the
- * latter for a machine whose conversation stores are unreadable.
+ * `agy models` lists the catalog newest first, so the first id is the vendor's
+ * current default — the model a fresh session starts on. The header line is
+ * written to stderr, but skip anything that is not a tab-separated pair just in
+ * case a build prints it to stdout.
  */
-function readLatestModel(): string | null {
-  return readLatestAntigravityModel() ?? readSettingsModel();
+export function firstModelFromCatalog(stdout: string): string | null {
+  for (const line of stdout.split("\n")) {
+    if (!line.includes("\t")) continue;
+    const id = line.split("\t")[0]?.trim() ?? "";
+    if (id !== "") return id;
+  }
+  return null;
+}
+
+async function readDefaultModel(): Promise<string | null> {
+  const now = Date.now();
+  if (defaultModelCache !== null && now - defaultModelCache.at < defaultModelCache.ttl) {
+    return defaultModelCache.value;
+  }
+  try {
+    const { stdout } = await execFileAsync(await locateAgyBinary(), ["models"], {
+      timeout: MODEL_CATALOG_TIMEOUT_MS,
+      maxBuffer: 256 * 1024,
+      shell: false,
+      windowsHide: true,
+    });
+    const value = firstModelFromCatalog(stdout);
+    defaultModelCache = {
+      value,
+      at: now,
+      ttl: value === null ? MODEL_CATALOG_FAILURE_TTL_MS : MODEL_CATALOG_TTL_MS,
+    };
+    return value;
+  } catch {
+    // Do not spend the catalog's timeout on every poll while it is unreachable.
+    const value = defaultModelCache?.value ?? null;
+    defaultModelCache = { value, at: now, ttl: MODEL_CATALOG_FAILURE_TTL_MS };
+    return value;
+  }
 }
 
 export function createNodeAntigravityQuotaAdapters(): AntigravityQuotaAdapters {
@@ -1605,7 +1636,7 @@ export function createNodeAntigravityQuotaAdapters(): AntigravityQuotaAdapters {
     runCli: runAgyUsage,
     probeKeyring: probeKeyringQuota,
     now: () => new Date(),
-    readLatestModel,
+    readDefaultModel,
   };
 }
 
@@ -1613,7 +1644,7 @@ export function createNodeAntigravityQuotaAdapters(): AntigravityQuotaAdapters {
 export async function probeAntigravityQuota(
   adapters: AntigravityQuotaAdapters = createNodeAntigravityQuotaAdapters(),
 ): Promise<AntigravityQuota> {
-  const latestModel = adapters.readLatestModel?.() ?? null;
+  const defaultModel = (await adapters.readDefaultModel?.()) ?? null;
   try {
     // Also bound injected runners so a stalled CLI always reaches the fallback.
     const quota = await runPhase(
@@ -1622,11 +1653,11 @@ export async function probeAntigravityQuota(
       PROBE_BUDGET_MS,
       async (signal) => parseAgyUsage(await adapters.runCli(signal), adapters.now().toISOString()),
     );
-    return { ...quota, latestModel };
+    return { ...quota, defaultModel };
   } catch (error) {
     const cliFailure = error instanceof AntigravityProbeError ? error.message : "agy /usage failed";
     try {
-      return { ...(await adapters.probeKeyring()), latestModel };
+      return { ...(await adapters.probeKeyring()), defaultModel };
     } catch (fallbackError) {
       const reason =
         fallbackError instanceof Error ? fallbackError.message : "keyring probe failed";

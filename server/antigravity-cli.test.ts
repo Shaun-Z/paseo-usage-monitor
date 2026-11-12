@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   type AntigravityQuotaAdapters,
   createNodeAntigravityQuotaAdapters,
+  firstModelFromCatalog,
   mapQuotaSummary,
   parseAgyUsage,
   probeAntigravityQuota,
@@ -147,20 +148,30 @@ describe("agy /usage", () => {
     expect(deps.probeKeyring).not.toHaveBeenCalled();
   });
 
-  test("carries the model the CLI last selected, with either source", async () => {
+  test("carries the catalog's newest-default model, with either source", async () => {
     const cli = adapters();
-    cli.readLatestModel = () => "Claude Opus 5.5 (Medium)";
+    cli.readDefaultModel = () => "gemini-4-argon-medium";
     await expect(probeAntigravityQuota(cli)).resolves.toMatchObject({
       source: "agy /usage",
-      latestModel: "Claude Opus 5.5 (Medium)",
+      defaultModel: "gemini-4-argon-medium",
     });
 
     const fallback = adapters("{}");
-    fallback.readLatestModel = () => "Gemini 3.8 Flash (High)";
+    fallback.readDefaultModel = () => "gemini-4-argon-medium";
     await expect(probeAntigravityQuota(fallback)).resolves.toMatchObject({
       source: "legacy",
-      latestModel: "Gemini 3.8 Flash (High)",
+      defaultModel: "gemini-4-argon-medium",
     });
+  });
+
+  test("takes the first id from the catalog output", () => {
+    expect(
+      firstModelFromCatalog(
+        "gemini-4-argon-medium\tGemini 4 Argon (Medium)\ngemini-3.8-flash-high\tGemini 3.8 Flash (High)\n",
+      ),
+    ).toBe("gemini-4-argon-medium");
+    expect(firstModelFromCatalog("Fetching available models...\n")).toBeNull();
+    expect(firstModelFromCatalog("")).toBeNull();
   });
 
   test.each([

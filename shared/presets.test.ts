@@ -1460,7 +1460,7 @@ describe("antigravity reads its quota through a probe", () => {
     const antigravity = getUsagePreset("antigravity");
     expect(antigravity?.source).toEqual({ kind: "probe", probe: "antigravity" });
     expect(antigravity?.credentials).toEqual({});
-    expect(antigravity?.fallbackModelPath).toBe("latestModel");
+    expect(antigravity?.fallbackModelPath).toBe("defaultModel");
     expect(antigravity?.refreshIntervalMs).toBeGreaterThanOrEqual(300_000);
   });
 

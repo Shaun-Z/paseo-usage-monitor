@@ -475,8 +475,9 @@ export const UsageProviderSchema = z.object({
   /**
    * JSON path into the provider's own document naming the model to scope the
    * composer rail to when the agent's current model matches no reading's
-   * `models`. Antigravity records the model its CLI last selected; a session on
-   * another harness uses that pool instead of whichever is closest to empty.
+   * `models`. Antigravity names its newest default model in the catalog; a
+   * session on another harness uses that pool instead of whichever is closest
+   * to empty.
    */
   fallbackModelPath: z.string().min(1).optional(),
   readings: z.array(UsageReadingMappingSchema).min(1),
