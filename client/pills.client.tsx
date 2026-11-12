@@ -959,12 +959,7 @@ export function composerPillLabel(
   if (settings.readout === "percent" || settings.readout === "amount") {
     // A stale reading keeps its number: the last good one beats a dash, and
     // the card says why it did not move.
-    const readout = metrics?.readout ?? EM_DASH;
-    // A balance can stand in for a spent subscription window. The currency
-    // sign is the mark that keeps the number from reading as another window;
-    // the card, not the host's text line, carries the colour.
-    const marker = metrics?.readingKind === "balance" && settings.label !== "reading" ? "¤" : "";
-    parts.push(`${marker}${readout}`);
+    parts.push(metrics?.readout ?? EM_DASH);
   }
   const joined = parts.filter((part) => part !== "").join(" · ");
   return joined === "" ? provider.label : joined;
