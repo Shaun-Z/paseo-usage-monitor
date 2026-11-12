@@ -1,12 +1,15 @@
 import { describe, expect, test, vi } from "vitest";
 import {
+  composerPillLabel,
   contributeComposerPills,
   TERMINAL_REFRESH_IDLE,
   terminalRefreshReducer,
 } from "./pills.client";
+import { pillMetrics, resolvePillSettings } from "../shared/pills.shared";
 import { LIMITS_POLL_MS } from "./limits.client";
 import { createMockClientContext } from "../test-stubs/plugin-client";
 import type {
+  UsageBalanceReading,
   UsagePillDisplay,
   UsageProviderSnapshot,
   UsageQuotaReading,
@@ -297,6 +300,56 @@ describe("contributeComposerPills client lifecycle", () => {
 });
 
 describe("composer pill text", () => {
+  function settingsFor(
+    label: "provider" | "reading" | "none",
+    value: "used" | "remaining" = "used",
+  ) {
+    const settings = resolvePillSettings({ pill: pill({ label, value }) });
+    if (settings === null) throw new Error("pill fixture must opt in");
+    return settings;
+  }
+
+  function creditsReading(): UsageBalanceReading {
+    return {
+      kind: "balance",
+      id: "credits",
+      label: "Credits",
+      group: null,
+      unit: "credits",
+      remaining: 3_261.7,
+      total: 8_000,
+      percentRemaining: 40.8,
+      currency: null,
+    };
+  }
+
+  function providerNamed(label: string): UsageProviderSnapshot {
+    return mockSnapshot([{ label }])[0] as UsageProviderSnapshot;
+  }
+
+  test("names a balance even when the configured label is none", () => {
+    const settings = settingsFor("none", "remaining");
+    const metrics = pillMetrics(creditsReading(), settings);
+
+    expect(composerPillLabel(providerNamed("Codex"), settings, metrics)).toBe("Credits · 41%");
+  });
+
+  test("keeps the provider label and adds the credit name", () => {
+    const settings = settingsFor("provider", "remaining");
+    const metrics = pillMetrics(creditsReading(), settings);
+
+    expect(composerPillLabel(providerNamed("Codex"), settings, metrics)).toBe(
+      "Codex · Credits · 41%",
+    );
+  });
+
+  test("does not name a quota, which is already the subscription figure", () => {
+    const settings = settingsFor("none");
+    const metrics = pillMetrics(quota(10), settings);
+
+    expect(composerPillLabel(providerNamed("Codex"), settings, metrics)).toBe("10%");
+  });
+
   test("a poll that changes the reading updates the label in place", async () => {
     vi.useFakeTimers();
     try {

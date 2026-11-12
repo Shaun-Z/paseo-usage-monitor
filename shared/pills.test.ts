@@ -874,6 +874,7 @@ describe("pillMetrics balance", () => {
 
   test("carries no window, because a balance does not reset", () => {
     expect(pillMetrics(balance(), settings())).toMatchObject({
+      readingKind: "balance",
       windowLabel: null,
       resetsAt: null,
     });

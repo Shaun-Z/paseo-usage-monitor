@@ -933,7 +933,7 @@ export function pillContentFor(
  * an omitted label falls back to the title — so an empty join falls back to the
  * provider's own name.
  */
-function composerPillLabel(
+export function composerPillLabel(
   provider: UsageProviderSnapshot,
   settings: ResolvedPillSettings,
   metrics: PillMetrics | null,
@@ -943,6 +943,12 @@ function composerPillLabel(
     parts.push(provider.label);
   }
   if (settings.label === "reading" && metrics !== null) {
+    parts.push(metrics.readingName);
+  }
+  // A balance can stand in for a spent subscription window. Without a word
+  // beside the number it reads as another window, so name the credit itself
+  // even when the configured label is "none".
+  if (settings.label !== "reading" && metrics?.readingKind === "balance") {
     parts.push(metrics.readingName);
   }
   if (settings.readout === "percent" || settings.readout === "amount") {

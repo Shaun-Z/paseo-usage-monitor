@@ -372,6 +372,8 @@ export function selectPillReading(
 export interface PillMetrics {
   /** The exact reading this came from, so a duplicate label cannot mislead a skip. */
   readingId: string;
+  /** A balance is a different promise from a subscription window; the pill says which. */
+  readingKind: "quota" | "balance";
   /** Mapping label, e.g. "Plan pool · Session". */
   readingLabel: string;
   /** Group-qualified name, e.g. "Gemini Models · Session". */
@@ -482,6 +484,7 @@ export function pillMetrics(
   const windowLabel = window?.label ?? null;
   return {
     readingId: reading.id,
+    readingKind: reading.kind,
     readingLabel: reading.label,
     readingName: pillReadingName(reading, windowLabel),
     percentUsed,
