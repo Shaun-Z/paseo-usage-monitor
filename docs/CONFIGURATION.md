@@ -65,14 +65,16 @@ Malformed JSON, or JSON that fails the schema, makes the plugin throw a `UsageCo
 
 An entry with `preset` starts from that preset, then each field present on the entry replaces the preset's field. The replacement is wholesale, with two exceptions:
 
-| Field                                                  | Merge                                                                                                |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `label`, `description`, `enabled`, `refreshIntervalMs` | Replaced.                                                                                            |
-| `source`                                               | Replaced as a whole object. You cannot override just the `url`.                                      |
-| `readings`                                             | Replaced as a whole array. There is no per-reading merge.                                            |
-| `limits`                                               | Replaced as a whole map.                                                                             |
-| `credentials`                                          | Merged **by credential name**; the entry wins per name, others survive.                              |
-| `display`                                              | Merged **field by field** against the preset, and `display.pill` merges field by field the same way. |
+| Field                                                  | Merge                                                                                                                                                   |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `label`, `description`, `enabled`, `refreshIntervalMs` | Replaced.                                                                                                                                               |
+| `source`                                               | Replaced as a whole object. You cannot override just the `url`.                                                                                         |
+| `readings`                                             | Replaced as a whole array, except that a reading still naming the preset's id, kind and paths is hydrated with optional fields its saved copy predates. |
+| `limits`                                               | Replaced as a whole map.                                                                                                                                |
+| `credentials`                                          | Merged **by credential name**; the entry wins per name, others survive.                                                                                 |
+| `display`                                              | Merged **field by field** against the preset, and `display.pill` merges field by field the same way.                                                    |
+
+The readings exception exists because the settings surface writes a preset's readings out in full. A provider saved before the preset gained an optional path would otherwise freeze that mapping forever. On load, a saved reading that still reads the same document keeps every value it states and gains the fields it could not have known about (`each.modelsPath`, `window.durationMsPath`, and the like); a reading that now reads a different document, or carries an edit the preset does not agree with, is left exactly as written.
 
 Every shipped preset declares exactly one credential name, so repointing a preset's key means re-declaring that one name:
 
