@@ -168,7 +168,7 @@ export const UsageFileSourceSchema = z.object({
  */
 export const UsageProbeSourceSchema = z.object({
   kind: z.literal("probe"),
-  probe: z.enum(["antigravity", "github-copilot", "codex"]),
+  probe: z.enum(["antigravity", "github-copilot", "codex", "mimo"]),
 });
 
 export const UsageSourceSchema = z.discriminatedUnion("kind", [
@@ -206,6 +206,13 @@ const UsageReadingCommonSchema = z.object({
    * own windows.
    */
   group: z.string().min(1).optional(),
+  /**
+   * Projects this reading only when the path resolves to something. A provider
+   * that reads two billing systems from one entry — MiMo's PAYG balance and its
+   * Token Plan — marks each set with the key its probe emits, so a mode the
+   * account does not have produces no rows at all instead of dashes.
+   */
+  whenPath: z.string().min(1).optional(),
 });
 
 /**

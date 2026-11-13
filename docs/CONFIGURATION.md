@@ -169,11 +169,12 @@ Editing rules from the settings surface takes effect on the rail's next read of 
 
 `readings` is a list discriminated on `kind`. Shared fields:
 
-| Field   | Type   | Required | Notes                                                                                                                                               |
-| ------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`    | string | yes      | Stable within the provider. With `each`, this is the prefix and `idPath` supplies the per-element part.                                             |
-| `label` | string | yes      | Bar label.                                                                                                                                          |
-| `group` | string | no       | Groups readings inside one card. A vendor that meters Google and non-Google models separately gets one group per family, each with its own windows. |
+| Field      | Type      | Required | Notes                                                                                                                                               |
+| ---------- | --------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`       | string    | yes      | Stable within the provider. With `each`, this is the prefix and `idPath` supplies the per-element part.                                             |
+| `label`    | string    | yes      | Bar label.                                                                                                                                          |
+| `group`    | string    | no       | Groups readings inside one card. A vendor that meters Google and non-Google models separately gets one group per family, each with its own windows. |
+| `whenPath` | JSON path | no       | Projects this reading only when the path resolves; lets one entry carry two billing modes and omit the one the account does not have.               |
 
 ### `kind: "quota"`
 

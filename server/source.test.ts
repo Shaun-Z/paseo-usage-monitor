@@ -521,6 +521,33 @@ describe("probe source", () => {
     const adapters = createNodeSourceAdapters();
     expect(typeof adapters.probeAntigravity).toBe("function");
     expect(typeof adapters.probeCodex).toBe("function");
+    expect(typeof adapters.probeMimo).toBe("function");
+  });
+
+  test("hands a mimo probe the resolver its two keys need", async () => {
+    const seen: string[] = [];
+    const adapters: UsageSourceAdapters = {
+      async fetchJson() {
+        throw new Error("unreachable");
+      },
+      async runCommand() {
+        throw new Error("unreachable");
+      },
+      async probeMimo(context) {
+        seen.push(context.resolve("planKey"));
+        return { token_plan: {} };
+      },
+    };
+
+    const document = await fetchSourceDocument(
+      { kind: "probe", probe: "mimo" },
+      adapters,
+      NO_FILES,
+      () => "tp-test",
+    );
+
+    expect(document).toEqual({ token_plan: {} });
+    expect(seen).toEqual(["tp-test"]);
   });
 });
 

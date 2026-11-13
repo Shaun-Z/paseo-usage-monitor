@@ -4,6 +4,7 @@ import { probeAntigravityUsage } from "./antigravity-usage.server";
 import { probeCodexUsage } from "./codex-probe.server";
 import { type CredentialAdapters, expandPath } from "./credentials.server";
 import { probeGithubCopilotQuota } from "./github-copilot-probe.server";
+import { probeMimoUsage } from "./mimo-probe.server";
 import {
   UsageCredentialMissingError,
   UsageInterpolationError,
@@ -58,6 +59,7 @@ export interface UsageSourceAdapters {
   probeAntigravity?: () => Promise<unknown>;
   probeGithubCopilot?: () => Promise<unknown>;
   probeCodex?: (context: UsageProbeContext) => Promise<unknown>;
+  probeMimo?: (context: UsageProbeContext) => Promise<unknown>;
 }
 
 function describeRequest(request: UsageHttpRequest): string {
@@ -178,6 +180,7 @@ export function createNodeSourceAdapters(): UsageSourceAdapters {
     probeAntigravity: probeAntigravityUsage,
     probeGithubCopilot: () => probeGithubCopilotQuota(),
     probeCodex: (context) => probeCodexUsage(context),
+    probeMimo: (context) => probeMimoUsage(context),
   };
 }
 
@@ -185,6 +188,7 @@ const PROBE_LABELS: Record<UsageProbeName, string> = {
   antigravity: "Antigravity",
   "github-copilot": "GitHub Copilot",
   codex: "Codex",
+  mimo: "MiMo",
 };
 
 function probeAdapter(
@@ -194,7 +198,11 @@ function probeAdapter(
 ): (() => Promise<unknown>) | undefined {
   if (probe === "antigravity") return adapters.probeAntigravity;
   if (probe === "github-copilot") return adapters.probeGithubCopilot;
-  const run = adapters.probeCodex;
+  if (probe === "codex") {
+    const run = adapters.probeCodex;
+    return run === undefined || context === undefined ? undefined : () => run(context);
+  }
+  const run = adapters.probeMimo;
   return run === undefined || context === undefined ? undefined : () => run(context);
 }
 

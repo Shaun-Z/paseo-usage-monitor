@@ -78,7 +78,6 @@ const SUGGESTED_MATCH_SPECS: Record<string, readonly string[]> = {
   // harness id keeps the pill opt-in and editable; a compatible harness can
   // match on its own provider or model instead.
   mimo: ["mimo"],
-  "mimo-token-plan": ["mimo"],
   kimi: ["omp:kimi", "pi:kimi-coding", "opencode:kimi-for-coding"],
   moonshot: ["omp:moonshot", "pi:moonshotai", "opencode:moonshotai"],
   "moonshot-cn": ["pi:moonshotai-cn", "opencode:moonshotai-cn"],

@@ -550,6 +550,9 @@ export interface ProjectReadingsInput {
 export function projectReadings(input: ProjectReadingsInput): UsageReading[] {
   const projected: UsageReading[] = [];
   for (const mapping of input.readings) {
+    if (mapping.whenPath !== undefined && readAtPath(input.document, mapping.whenPath) === null) {
+      continue;
+    }
     if (mapping.kind === "rate") {
       projected.push(projectRate(mapping, input.document, input.now));
       continue;

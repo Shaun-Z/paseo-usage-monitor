@@ -673,29 +673,75 @@ const PRESET_DEFINITIONS: Record<string, UsageProvider> = {
   mimo: definePreset({
     label: "MiMo",
     icon: { kind: "monogram", text: "Mi", color: "#FF6900" },
-    description: "Xiaomi MiMo pay-as-you-go cash, gift, credit line and total available balance",
+    description:
+      "Xiaomi MiMo: the PAYG balance and the Coding Token Plan credits, whichever key is configured",
     credentials: {
       apiKey: [
         { kind: "env", variable: "MIMO_API_KEY" },
         { kind: "env", variable: "XIAOMI_MIMO_API_KEY" },
       ],
+      planKey: [
+        { kind: "env", variable: "MIMO_TOKEN_PLAN_API_KEY" },
+        { kind: "env", variable: "MIMO_TOKEN_PLAN_KEY" },
+      ],
     },
-    source: {
-      kind: "http",
-      url: "https://api.xiaomimimo.com/v1/platform/balance",
-      method: "GET",
-      headers: { Authorization: "Bearer ${apiKey}", Accept: "application/json" },
-    },
-    // The response carries one ledger per currency, in no guaranteed order and
-    // with zeros in the ones this account does not fund, so every reading picks
-    // the element with the largest `total_available` rather than index 0.
+    // One probe reads both hosts. A mode whose key is absent is never
+    // requested, and `whenPath` keeps its rows off the card.
+    source: { kind: "probe", probe: "mimo" },
     readings: [
+      // The Token Plan first: when both keys are configured, the pill should
+      // prefer the subscription's credits to the pay-as-you-go balance.
+      {
+        kind: "balance",
+        id: "credits",
+        label: "Credits",
+        unit: "credits",
+        whenPath: "token_plan",
+        remainingPath: "token_plan.quota.remaining_credits",
+        totalPath: "token_plan.quota.total_credits",
+        usedPath: "token_plan.quota.used_credits",
+      },
+      {
+        kind: "rate",
+        id: "plan",
+        label: "Plan",
+        whenPath: "token_plan",
+        resolution: {
+          via: "response",
+          statePath: "token_plan.plan_code",
+          // The vendor sends the cycle end as a UTC wall-clock string with no
+          // offset, so it is shown verbatim as a detail rather than parsed as
+          // a local timestamp.
+          detailPath: "token_plan.period.end_at",
+        },
+      },
+      {
+        kind: "rate",
+        id: "auto-renew",
+        label: "Auto-renew",
+        whenPath: "token_plan",
+        resolution: { via: "response", statePath: "token_plan.auto_renew" },
+      },
+      // The PAYG balance picks the funded currency ledger by `total_available`.
+      // `each` over an absent `payg.balance_infos` yields no row at all, and
+      // `whenPath` keeps the mapping explicit about the mode it belongs to.
+      {
+        kind: "balance",
+        id: "available",
+        label: "Available",
+        unit: "usd",
+        whenPath: "payg",
+        each: { path: "payg.balance_infos", maxByPath: "total_available" },
+        remainingPath: "total_available",
+        currencyPath: "currency",
+      },
       {
         kind: "balance",
         id: "cash",
         label: "Cash",
         unit: "usd",
-        each: { path: "balance_infos", maxByPath: "total_available" },
+        whenPath: "payg",
+        each: { path: "payg.balance_infos", maxByPath: "total_available" },
         remainingPath: "cash_balance",
         currencyPath: "currency",
       },
@@ -704,7 +750,8 @@ const PRESET_DEFINITIONS: Record<string, UsageProvider> = {
         id: "gift",
         label: "Gift",
         unit: "usd",
-        each: { path: "balance_infos", maxByPath: "total_available" },
+        whenPath: "payg",
+        each: { path: "payg.balance_infos", maxByPath: "total_available" },
         remainingPath: "gift_balance",
         currencyPath: "currency",
       },
@@ -713,67 +760,10 @@ const PRESET_DEFINITIONS: Record<string, UsageProvider> = {
         id: "credit",
         label: "Credit line",
         unit: "usd",
-        each: { path: "balance_infos", maxByPath: "total_available" },
+        whenPath: "payg",
+        each: { path: "payg.balance_infos", maxByPath: "total_available" },
         remainingPath: "credit_available",
         currencyPath: "currency",
-      },
-      {
-        kind: "balance",
-        id: "available",
-        label: "Available",
-        unit: "usd",
-        each: { path: "balance_infos", maxByPath: "total_available" },
-        remainingPath: "total_available",
-        currencyPath: "currency",
-      },
-    ],
-  }),
-
-  "mimo-token-plan": definePreset({
-    label: "MiMo Token Plan",
-    icon: { kind: "monogram", text: "MT", color: "#F97316" },
-    description:
-      "Xiaomi MiMo Coding Token Plan credits with its plan, billing cycle and auto-renew state",
-    credentials: {
-      apiKey: [
-        { kind: "env", variable: "MIMO_TOKEN_PLAN_API_KEY" },
-        { kind: "env", variable: "MIMO_TOKEN_PLAN_KEY" },
-      ],
-    },
-    source: {
-      kind: "http",
-      url: "https://token-plan-cn.xiaomimimo.com/v1/platform/token_plan",
-      method: "GET",
-      headers: { Authorization: "Bearer ${apiKey}", Accept: "application/json" },
-    },
-    readings: [
-      {
-        kind: "balance",
-        id: "credits",
-        label: "Credits",
-        unit: "credits",
-        remainingPath: "quota.remaining_credits",
-        totalPath: "quota.total_credits",
-        usedPath: "quota.used_credits",
-      },
-      {
-        kind: "rate",
-        id: "plan",
-        label: "Plan",
-        resolution: {
-          via: "response",
-          statePath: "plan_code",
-          // The vendor sends the cycle end as a UTC wall-clock string with no
-          // offset, so it is shown verbatim as a detail rather than parsed as
-          // a local timestamp.
-          detailPath: "period.end_at",
-        },
-      },
-      {
-        kind: "rate",
-        id: "auto-renew",
-        label: "Auto-renew",
-        resolution: { via: "response", statePath: "auto_renew" },
       },
     ],
   }),

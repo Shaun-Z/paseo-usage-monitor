@@ -599,7 +599,7 @@ const VENDOR_SPECS: readonly VendorSpec[] = [
   },
   {
     id: "mimo",
-    presets: ["mimo", "mimo-token-plan"],
+    presets: ["mimo"],
     trackedBy: "mimo",
     label: "MiMo",
     kind: "balance",
