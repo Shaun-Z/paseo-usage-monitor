@@ -385,6 +385,13 @@ function scheduleChangesAt(
   return new Date(instantForWallClock(target, timeZone)).toISOString();
 }
 
+/** A boolean state path reads as `on`/`off`; a MiMo auto-renew flag needs that. */
+function readRateState(document: unknown, path: string): string {
+  const value = readAtPath(document, path);
+  if (typeof value === "boolean") return value ? "on" : "off";
+  return readNonEmptyString(document, path) ?? "Unknown";
+}
+
 function projectRate(mapping: UsageRateMapping, document: unknown, now: Date): UsageRateReading {
   const common = {
     kind: "rate",
@@ -409,7 +416,7 @@ function projectRate(mapping: UsageRateMapping, document: unknown, now: Date): U
   const { statePath, multiplierPath, changesAtPath, detailPath } = mapping.resolution;
   return {
     ...common,
-    state: readNonEmptyString(document, statePath) ?? "Unknown",
+    state: readRateState(document, statePath),
     multiplier: readAmount(document, multiplierPath),
     changesAt: changesAtPath ? readTimestampAtPath(document, changesAtPath) : null,
     detail: readNonEmptyString(document, detailPath),

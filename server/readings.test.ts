@@ -1177,6 +1177,19 @@ describe("projectReadings rate via schedule", () => {
 });
 
 describe("projectReadings rate via response", () => {
+  test("renders a boolean state path as on or off", () => {
+    const mapping: UsageRateMapping = {
+      kind: "rate",
+      id: "auto-renew",
+      label: "Auto-renew",
+      resolution: { via: "response", statePath: "auto_renew" },
+    };
+
+    expect(project([mapping], { auto_renew: true })[0]).toMatchObject({ state: "on" });
+    expect(project([mapping], { auto_renew: false })[0]).toMatchObject({ state: "off" });
+    expect(project([mapping], {})[0]).toMatchObject({ state: "Unknown" });
+  });
+
   test("reads state, multiplier, changesAt and detail from the document", () => {
     const mapping: UsageRateMapping = {
       kind: "rate",

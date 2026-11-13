@@ -560,6 +560,33 @@ const RESPONSE_FIXTURES: Record<string, unknown> = {
       },
     ],
   },
+  mimo: {
+    object: "balance",
+    is_available: true,
+    balance_infos: [
+      {
+        currency: "CNY",
+        cash_balance: "100.50",
+        gift_balance: "20.00",
+        frozen_balance: "0.00",
+        credit_limit: "500.00",
+        credit_available: "380.00",
+        total_available: "500.50",
+      },
+    ],
+  },
+  "mimo-token-plan": {
+    object: "token_plan",
+    plan_code: "pro",
+    period: { start_at: "2026-11-01 00:00:00", end_at: "2026-12-01 00:00:00" },
+    quota: {
+      total_credits: 10_000_000,
+      used_credits: 1_500_000,
+      remaining_credits: 8_500_000,
+    },
+    auto_renew: true,
+    claw_enabled: false,
+  },
   openrouter: { data: { limit: 200, limit_remaining: 50, usage: 150 } },
   kimi: {
     usage: { used: 120, limit: 500, remaining: 380, resetTime: "2026-08-29T00:00:00Z" },
@@ -959,6 +986,37 @@ describe("verified presets resolve their recorded responses", () => {
       used: 120,
       limit: 500,
       unit: "credits",
+    });
+  });
+
+  test("mimo splits cash, gift, credit line and available in the funded currency", () => {
+    expect(readingById("mimo", "cash")).toMatchObject({
+      kind: "balance",
+      remaining: 100.5,
+      currency: "CNY",
+      unit: "usd",
+    });
+    expect(readingById("mimo", "gift")).toMatchObject({ remaining: 20 });
+    expect(readingById("mimo", "credit")).toMatchObject({ remaining: 380 });
+    expect(readingById("mimo", "available")).toMatchObject({ remaining: 500.5 });
+  });
+
+  test("mimo token plan reports its credits, cycle detail and auto-renew state", () => {
+    expect(readingById("mimo-token-plan", "credits")).toMatchObject({
+      kind: "balance",
+      remaining: 8_500_000,
+      total: 10_000_000,
+      percentRemaining: 85,
+      unit: "credits",
+    });
+    expect(readingById("mimo-token-plan", "plan")).toMatchObject({
+      kind: "rate",
+      state: "pro",
+      detail: "2026-12-01 00:00:00",
+    });
+    expect(readingById("mimo-token-plan", "auto-renew")).toMatchObject({
+      kind: "rate",
+      state: "on",
     });
   });
 

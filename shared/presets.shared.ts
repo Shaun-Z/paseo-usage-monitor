@@ -670,6 +670,114 @@ const PRESET_DEFINITIONS: Record<string, UsageProvider> = {
     ],
   }),
 
+  mimo: definePreset({
+    label: "MiMo",
+    icon: { kind: "monogram", text: "Mi", color: "#FF6900" },
+    description: "Xiaomi MiMo pay-as-you-go cash, gift, credit line and total available balance",
+    credentials: {
+      apiKey: [
+        { kind: "env", variable: "MIMO_API_KEY" },
+        { kind: "env", variable: "XIAOMI_MIMO_API_KEY" },
+      ],
+    },
+    source: {
+      kind: "http",
+      url: "https://api.xiaomimimo.com/v1/platform/balance",
+      method: "GET",
+      headers: { Authorization: "Bearer ${apiKey}", Accept: "application/json" },
+    },
+    // The response carries one ledger per currency, in no guaranteed order and
+    // with zeros in the ones this account does not fund, so every reading picks
+    // the element with the largest `total_available` rather than index 0.
+    readings: [
+      {
+        kind: "balance",
+        id: "cash",
+        label: "Cash",
+        unit: "usd",
+        each: { path: "balance_infos", maxByPath: "total_available" },
+        remainingPath: "cash_balance",
+        currencyPath: "currency",
+      },
+      {
+        kind: "balance",
+        id: "gift",
+        label: "Gift",
+        unit: "usd",
+        each: { path: "balance_infos", maxByPath: "total_available" },
+        remainingPath: "gift_balance",
+        currencyPath: "currency",
+      },
+      {
+        kind: "balance",
+        id: "credit",
+        label: "Credit line",
+        unit: "usd",
+        each: { path: "balance_infos", maxByPath: "total_available" },
+        remainingPath: "credit_available",
+        currencyPath: "currency",
+      },
+      {
+        kind: "balance",
+        id: "available",
+        label: "Available",
+        unit: "usd",
+        each: { path: "balance_infos", maxByPath: "total_available" },
+        remainingPath: "total_available",
+        currencyPath: "currency",
+      },
+    ],
+  }),
+
+  "mimo-token-plan": definePreset({
+    label: "MiMo Token Plan",
+    icon: { kind: "monogram", text: "MT", color: "#F97316" },
+    description:
+      "Xiaomi MiMo Coding Token Plan credits with its plan, billing cycle and auto-renew state",
+    credentials: {
+      apiKey: [
+        { kind: "env", variable: "MIMO_TOKEN_PLAN_API_KEY" },
+        { kind: "env", variable: "MIMO_TOKEN_PLAN_KEY" },
+      ],
+    },
+    source: {
+      kind: "http",
+      url: "https://token-plan-cn.xiaomimimo.com/v1/platform/token_plan",
+      method: "GET",
+      headers: { Authorization: "Bearer ${apiKey}", Accept: "application/json" },
+    },
+    readings: [
+      {
+        kind: "balance",
+        id: "credits",
+        label: "Credits",
+        unit: "credits",
+        remainingPath: "quota.remaining_credits",
+        totalPath: "quota.total_credits",
+        usedPath: "quota.used_credits",
+      },
+      {
+        kind: "rate",
+        id: "plan",
+        label: "Plan",
+        resolution: {
+          via: "response",
+          statePath: "plan_code",
+          // The vendor sends the cycle end as a UTC wall-clock string with no
+          // offset, so it is shown verbatim as a detail rather than parsed as
+          // a local timestamp.
+          detailPath: "period.end_at",
+        },
+      },
+      {
+        kind: "rate",
+        id: "auto-renew",
+        label: "Auto-renew",
+        resolution: { via: "response", statePath: "auto_renew" },
+      },
+    ],
+  }),
+
   "deepseek-rate": definePreset({
     label: "DeepSeek pricing",
     icon: { kind: "lucide", name: "Gauge" },

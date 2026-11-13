@@ -598,6 +598,19 @@ const VENDOR_SPECS: readonly VendorSpec[] = [
     agentProviders: ["deepseek"],
   },
   {
+    id: "mimo",
+    presets: ["mimo", "mimo-token-plan"],
+    trackedBy: "mimo",
+    label: "MiMo",
+    kind: "balance",
+    // The vendor has published the API routes but no console page was
+    // confirmed here, so the alert names the account without a guessed link.
+    usageUrl: null,
+    topUpUrl: null,
+    modelPrefixes: [/^mimo\//i, /^xiaomi-mimo\//i],
+    agentProviders: ["mimo"],
+  },
+  {
     id: "moonshot",
     presets: ["moonshot"],
     trackedBy: "moonshot",
