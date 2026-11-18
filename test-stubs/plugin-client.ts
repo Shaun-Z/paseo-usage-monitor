@@ -75,6 +75,11 @@ export interface MockClientContext extends PluginClientContext {
   /** Drops an agent from the directory without delivering an update. */
   simulateAgentLost: (agentId: string) => void;
   simulateLimitsUpdate: (providers: unknown[]) => void;
+  /** Sets the model catalog a provider's `listModels` returns. */
+  simulateModels: (
+    provider: string,
+    models: { id: string; label: string; aliases?: string[] }[],
+  ) => void;
   /** Redelivers a full directory snapshot; false while no observer is subscribed. */
   simulateObservationSnapshot: () => boolean;
 }
@@ -87,6 +92,7 @@ export function createMockClientContext(
   const agentSubscribers = new Set<(update: PaseoAgentUpdate) => void>();
   const agents = new Map<string, PaseoAgent>();
   let currentProviders = initialProviders;
+  const modelCatalogs = new Map<string, { id: string; label: string; aliases?: string[] }[]>();
   let observingAgents = false;
   let observationUpdate: ((message: SessionOutboundMessage) => void) | undefined;
   let observationSnapshot: ((directory: PaseoAgentListResult) => void) | undefined;
@@ -159,7 +165,14 @@ export function createMockClientContext(
       workspaces: {} as unknown as PluginClientContext["paseo"]["workspaces"],
       terminals: {} as unknown as PluginClientContext["paseo"]["terminals"],
       projects: {} as unknown as PluginClientContext["paseo"]["projects"],
-      providers: {} as unknown as PluginClientContext["paseo"]["providers"],
+      providers: {
+        listModels: async (provider: string) => ({
+          provider,
+          models: modelCatalogs.get(provider) ?? [],
+          fetchedAt: "2026-01-01T00:00:00.000Z",
+          requestId: "mock-models-req",
+        }),
+      } as unknown as PluginClientContext["paseo"]["providers"],
       config: {} as unknown as PluginClientContext["paseo"]["config"],
       agents: {
         list: async (options?: PaseoAgentListOptions): Promise<PaseoAgentListResult> => {
@@ -246,6 +259,10 @@ export function createMockClientContext(
 
     simulateLimitsUpdate(providers: unknown[]) {
       currentProviders = providers;
+    },
+
+    simulateModels(provider, models) {
+      modelCatalogs.set(provider, models);
     },
 
     /**

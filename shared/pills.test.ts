@@ -771,6 +771,38 @@ describe("selectPillReading", () => {
     expect(selectPillReading(readings, null, "deepseek-flash", "muse-1")).toBe(claude);
   });
 
+  // Antigravity names an orchestrator by its id but puts the primary model in
+  // the catalog label. The id's "gemini pro" would otherwise track the Gemini
+  // pool; the label's "(Argon)" is what says which pool actually bills.
+  test("a catalog label's parenthetical names the primary pool", () => {
+    const gemini = quota({
+      id: "gemini-5h",
+      window: { label: "Session", resetsAt: null, durationMs: FIVE_HOURS_MS },
+      percent: 2,
+      models: ["Gemini Flash", "Gemini Pro"],
+    });
+    const argon = quota({
+      id: "argon-weekly",
+      window: { label: "Weekly", resetsAt: null, durationMs: SEVEN_DAYS_MS },
+      percent: 99.6,
+      models: ["Gemini 4 Argon"],
+    });
+
+    expect(selectPillReading([gemini, argon], null, "gemini-pro-orchestrator")).toBe(gemini);
+    expect(
+      selectPillReading(
+        [gemini, argon],
+        null,
+        "gemini-pro-orchestrator",
+        null,
+        "Orchestrator (Argon)",
+      ),
+    ).toBe(argon);
+    expect(selectPillReading([gemini], null, "gemini-3.8-flash", null, "Gemini 3.8 Flash")).toBe(
+      gemini,
+    );
+  });
+
   test("a pinned reading stays pinned whatever model is selected", () => {
     const argon = quota({
       id: "bucket-argon",

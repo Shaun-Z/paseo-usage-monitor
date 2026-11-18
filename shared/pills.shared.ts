@@ -311,6 +311,28 @@ function readingServesModel(reading: UsagePillReading, model: string): boolean {
 }
 
 /**
+ * A harness can name a model by an id that says little about the pool it
+ * bills — Antigravity's `gemini-pro-orchestrator-g1-pro` runs on Argon, and its
+ * catalog label says `Orchestrator (Argon)`. The label's full words or the
+ * variant in its parentheses are the pool hint; a shared pool without models
+ * stays eligible either way.
+ */
+function readingServesLabel(reading: UsagePillReading, label: string): boolean {
+  if (reading.kind !== "quota" || reading.models === undefined || reading.models === null) {
+    return true;
+  }
+  const labelTokens = modelTokens(label);
+  const variant = /\(([^)]+)\)/.exec(label)?.[1] ?? null;
+  const variantTokens = variant === null ? [] : modelTokens(variant);
+  return reading.models.some((name) => {
+    const nameTokens = modelTokens(name);
+    if (nameTokens.length === 0) return false;
+    if (nameTokens.every((token) => labelTokens.includes(token))) return true;
+    return variantTokens.length > 0 && variantTokens.every((token) => nameTokens.includes(token));
+  });
+}
+
+/**
  * Without a pinned id the pill tracks the reading that answers "how close am I
  * to running out". A reading whose vendor publishes no ceiling can state an
  * amount but never a percentage, so it cannot fill a gauge and is only ever a
@@ -331,6 +353,7 @@ export function selectPillReading(
   preferredId: string | null,
   model: string | null = null,
   fallbackModel: string | null = null,
+  modelLabel: string | null = null,
 ): UsagePillReading | null {
   const candidates = readings.filter(isPillReading);
   if (candidates.length === 0) {
@@ -346,7 +369,12 @@ export function selectPillReading(
   const pool = measured.length > 0 ? measured : candidates;
   const scopedFor = (candidateModel: string) =>
     pool.filter((reading) => readingServesModel(reading, candidateModel));
-  const scoped = model === null ? [] : scopedFor(model);
+  // The catalog's display name is the better hint when the id names the
+  // orchestrator rather than the pool it bills: try it before the id, which
+  // can otherwise match a different pool through a shared word like "pro".
+  const labelScoped =
+    modelLabel === null ? [] : pool.filter((reading) => readingServesLabel(reading, modelLabel));
+  const scoped = labelScoped.length > 0 ? labelScoped : model === null ? [] : scopedFor(model);
   // A session on another harness has no Antigravity model to match. The vendor
   // keeps the last model its CLI selected, so use that pool's session rather
   // than whichever pool happens to be closest to empty.

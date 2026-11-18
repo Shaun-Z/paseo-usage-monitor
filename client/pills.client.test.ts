@@ -299,6 +299,74 @@ describe("contributeComposerPills client lifecycle", () => {
   });
 });
 
+describe("composer pill model catalog", () => {
+  function poolReading(options: {
+    id: string;
+    group: string;
+    percent: number;
+    models: string[];
+  }): UsageQuotaReading {
+    return {
+      kind: "quota",
+      id: options.id,
+      label: "Plan pool",
+      group: options.group,
+      unit: "percent",
+      window: { label: "Window", resetsAt: null, durationMs: null },
+      used: null,
+      limit: null,
+      remaining: null,
+      percent: options.percent,
+      models: options.models,
+    };
+  }
+
+  test("uses the catalog label to find an orchestrator's primary pool", async () => {
+    const providers = mockSnapshot([
+      {
+        label: "Test Provider",
+        display: { pill: pill({ value: "remaining" }) },
+        readings: [
+          poolReading({
+            id: "gemini-5h",
+            group: "Gemini Models",
+            percent: 2,
+            models: ["Gemini Flash", "Gemini Pro"],
+          }),
+          poolReading({
+            id: "argon-weekly",
+            group: "Gemini 4 Argon",
+            percent: 99.6,
+            models: ["Gemini 4 Argon"],
+          }),
+        ],
+      },
+    ]);
+    const client = createMockClientContext(providers);
+    client.simulateModels("antigravity-cli", [
+      { id: "gemini-pro-orchestrator-g1-pro", label: "Orchestrator (Argon)" },
+    ]);
+    client.simulateAgentAdded({
+      id: "agent-1",
+      workspaceId: "wks-1",
+      provider: "antigravity-cli",
+      model: "gemini-pro-orchestrator",
+    });
+    const stop = contributeComposerPills(client);
+    try {
+      await vi.waitFor(() => expect(client.registeredPills.length).toBe(1));
+      // Without the label the id contains "gemini pro" and would track the
+      // Gemini session at 98% left. The label says Argon, whose 99.6% used
+      // reads 0% left.
+      await vi.waitFor(() =>
+        expect(client.registeredPills[0]?.button.label).toBe("Test Provider · 0%"),
+      );
+    } finally {
+      stop();
+    }
+  });
+});
+
 describe("composer pill text", () => {
   function settingsFor(
     label: "provider" | "reading" | "none",

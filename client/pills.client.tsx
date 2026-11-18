@@ -795,15 +795,20 @@ function trackedAmounts(provider: UsageProviderSnapshot, metrics: PillMetrics): 
 const pillIcons = new Map<string, ComponentType<PluginButtonIconProps>>();
 
 /** One cached component per provider and agent model, so a poll reuses it. */
-function pillVariantKey(providerId: string, model: string | null): string {
-  return `${providerId}\u0000${model ?? ""}`;
+function pillVariantKey(
+  providerId: string,
+  model: string | null,
+  modelLabel: string | null,
+): string {
+  return `${providerId}\u0000${model ?? ""}\u0000${modelLabel ?? ""}`;
 }
 
 export function pillIconFor(
   providerId: string,
   model: string | null = null,
+  modelLabel: string | null = null,
 ): ComponentType<PluginButtonIconProps> {
-  const key = pillVariantKey(providerId, model);
+  const key = pillVariantKey(providerId, model, modelLabel);
   const existing = pillIcons.get(key);
   if (existing !== undefined) {
     return existing;
@@ -823,7 +828,13 @@ export function pillIconFor(
     const reading =
       provider === null || settings === null
         ? null
-        : selectPillReading(provider.readings, settings.reading, model, provider.fallbackModel);
+        : selectPillReading(
+            provider.readings,
+            settings.reading,
+            model,
+            provider.fallbackModel,
+            modelLabel,
+          );
     const metrics = reading === null || settings === null ? null : pillMetrics(reading, settings);
     // The tone carries the provider's own health, so a failed fetch reads as
     // danger whatever the last number said.
@@ -889,8 +900,9 @@ const pillContents = new Map<string, ComponentType<PluginButtonContentProps>>();
 export function pillContentFor(
   providerId: string,
   model: string | null = null,
+  modelLabel: string | null = null,
 ): ComponentType<PluginButtonContentProps> {
-  const key = pillVariantKey(providerId, model);
+  const key = pillVariantKey(providerId, model, modelLabel);
   const existing = pillContents.get(key);
   if (existing !== undefined) {
     return existing;
@@ -908,7 +920,13 @@ export function pillContentFor(
     const reading =
       provider === null || settings === null
         ? null
-        : selectPillReading(provider.readings, settings.reading, model, provider.fallbackModel);
+        : selectPillReading(
+            provider.readings,
+            settings.reading,
+            model,
+            provider.fallbackModel,
+            modelLabel,
+          );
     const metrics = reading === null || settings === null ? null : pillMetrics(reading, settings);
     const tone =
       provider?.status === "error" ? theme.colors.statusDanger : pillTone(metrics, theme);
@@ -970,6 +988,7 @@ function entryLabel(
   provider: UsageProviderSnapshot | null,
   entry: ComposerPillEntry,
   model: string | null,
+  modelLabel: string | null,
 ): string {
   if (provider === null) {
     return entry.providerLabel;
@@ -979,6 +998,7 @@ function entryLabel(
     entry.settings.reading,
     model,
     provider.fallbackModel,
+    modelLabel,
   );
   const metrics = reading === null ? null : pillMetrics(reading, entry.settings);
   return composerPillLabel(provider, entry.settings, metrics);
@@ -997,6 +1017,8 @@ interface Registration {
   label: string;
   /** The agent model the icon and popover were built for. */
   model: string | null;
+  /** The catalog label that named its primary pool. */
+  modelLabel: string | null;
 }
 
 interface AgentSelection {
@@ -1049,6 +1071,7 @@ interface WantedPill {
   title: string;
   label: string;
   model: string | null;
+  modelLabel: string | null;
 }
 
 /**
@@ -1075,6 +1098,63 @@ export function contributeComposerPills(client: PluginClientContext): () => void
     });
   }
   let observation: AgentObservation | undefined;
+  /**
+   * Model id to the catalog label the harness shows. The pill uses it to find
+   * the pool a model actually bills to: Antigravity names an orchestrator by
+   * its id but puts the primary model — `Orchestrator (Argon)` — in the label.
+   */
+  const modelLabelsByProvider = new Map<string, Map<string, string>>();
+  const catalogState = new Map<string, "loading" | "loaded">();
+
+  function modelLabelFor(selection: AgentSelection): string | null {
+    if (selection.provider === null || selection.model === null) return null;
+    const labels = modelLabelsByProvider.get(selection.provider);
+    if (labels === undefined) return null;
+    const exact = labels.get(selection.model);
+    if (exact !== undefined) return exact;
+    // Some harnesses record a shorter id than the catalog lists; the catalog
+    // entry then extends the agent's with a suffix (`…-g1-pro`).
+    let best: string | null = null;
+    let bestId = "";
+    for (const [id, label] of labels) {
+      if (!id.startsWith(`${selection.model}-`) || id.length <= bestId.length) continue;
+      best = label;
+      bestId = id;
+    }
+    return best;
+  }
+
+  async function ensureCatalogs(): Promise<void> {
+    const providersToLoad = new Set<string>();
+    for (const selection of selectionByAgent.values()) {
+      if (selection.provider === null || catalogState.has(selection.provider)) continue;
+      providersToLoad.add(selection.provider);
+    }
+    if (providersToLoad.size === 0) return;
+    for (const provider of providersToLoad) catalogState.set(provider, "loading");
+    await Promise.all(
+      [...providersToLoad].map(async (provider) => {
+        try {
+          const listModels = client.paseo.providers.listModels;
+          const result = await listModels(
+            provider as Parameters<typeof client.paseo.providers.listModels>[0],
+          );
+          const labels = new Map<string, string>();
+          for (const model of result.models ?? []) {
+            labels.set(model.id, model.label);
+            for (const alias of model.aliases ?? []) labels.set(alias, model.label);
+          }
+          modelLabelsByProvider.set(provider, labels);
+        } catch (error) {
+          // A provider whose catalog cannot be read keeps the id-based rules.
+          console.warn("[usage-monitor] model catalog read failed", error);
+          modelLabelsByProvider.set(provider, new Map());
+        }
+        catalogState.set(provider, "loaded");
+      }),
+    );
+    if (!stopped) sync();
+  }
 
   function sync(): void {
     if (stopped) {
@@ -1086,13 +1166,20 @@ export function contributeComposerPills(client: PluginClientContext): () => void
         if (!matchesPillSelection(entry.pill, selection)) {
           continue;
         }
+        const modelLabel = modelLabelFor(selection);
         wanted.set(registrationKey(agentId, entry.providerId), {
           agentId,
           workspaceId: selection.workspaceId,
           entry,
           title: `${entry.providerLabel} usage`,
-          label: entryLabel(findProvider(providers, entry.providerId), entry, selection.model),
+          label: entryLabel(
+            findProvider(providers, entry.providerId),
+            entry,
+            selection.model,
+            modelLabel,
+          ),
           model: selection.model,
+          modelLabel,
         });
       }
     }
@@ -1113,24 +1200,26 @@ export function contributeComposerPills(client: PluginClientContext): () => void
         registration.handle.update({ label: target.label });
         registration.label = target.label;
       }
-      // A different model can change which pool the pill tracks, and the icon
-      // captures that choice, so the button is rebuilt for the new model.
-      if (registration.model !== target.model) {
+      // A different model, or the catalog label that names its primary pool,
+      // can change which reading the pill tracks; the icon captures that
+      // choice, so the button is rebuilt when either changes.
+      if (registration.model !== target.model || registration.modelLabel !== target.modelLabel) {
         registration.handle.update({
-          icon: pillIconFor(target.entry.providerId, target.model),
+          icon: pillIconFor(target.entry.providerId, target.model, target.modelLabel),
           behavior: {
             kind: "popover",
-            Content: pillContentFor(target.entry.providerId, target.model),
+            Content: pillContentFor(target.entry.providerId, target.model, target.modelLabel),
           },
         });
         registration.model = target.model;
+        registration.modelLabel = target.modelLabel;
       }
     }
     for (const [key, target] of wanted) {
       if (registrations.has(key)) {
         continue;
       }
-      const { agentId, workspaceId, entry, title, label, model } = target;
+      const { agentId, workspaceId, entry, title, label, model, modelLabel } = target;
       const handle = client.addComposerPill({
         id: composerPillId(entry.providerId),
         workspaceId,
@@ -1138,14 +1227,18 @@ export function contributeComposerPills(client: PluginClientContext): () => void
         button: {
           title,
           label,
-          icon: pillIconFor(entry.providerId, model),
+          icon: pillIconFor(entry.providerId, model, modelLabel),
           // The host anchors, contains, scrolls and dismisses this popover;
           // the card draws its body and nothing around it.
-          behavior: { kind: "popover", Content: pillContentFor(entry.providerId, model) },
+          behavior: {
+            kind: "popover",
+            Content: pillContentFor(entry.providerId, model, modelLabel),
+          },
         },
       });
-      registrations.set(key, { handle, workspaceId, title, label, model });
+      registrations.set(key, { handle, workspaceId, title, label, model, modelLabel });
     }
+    void ensureCatalogs();
   }
 
   function trackAgent(agent: {
